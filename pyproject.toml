@@ -3,7 +3,7 @@ requires = ["setuptools >= 61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "MY_NEW_PACKAGE"
+name = "factory_bot"
 authors = [{name = "Daniel Pepper"}]
 dynamic = ["version"]
 description = "..."
@@ -23,10 +23,10 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/dpep/MY_NEW_REPO"
+Homepage = "https://github.com/dpep/py_factory_bot"
 
 [tool.setuptools]
-packages = ["MY_NEW_PACKAGE"]
+packages = ["factory_bot"]
 
 [tool.setuptools.dynamic]
-version = {attr = "MY_NEW_PACKAGE.__version__"}
+version = {attr = "factory_bot.__version__"}

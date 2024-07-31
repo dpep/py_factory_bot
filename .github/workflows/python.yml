@@ -32,7 +32,7 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/')  # tags pushed
       uses: pypa/gh-action-pypi-publish@release/v1
       env:
-        url: https://pypi.org/p/MY_NEW_PACKAGE
+        url: https://pypi.org/p/factory_bot
 
 
 permissions:

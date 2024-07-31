@@ -1,9 +1,9 @@
-MY_NEW_PACKAGE
+
 ======
 ...
 
 ### Install
-```pip install MY_NEW_PACKAGE```
+```pip install factory_bot```
 
 
 ### Usage
@@ -12,5 +12,5 @@ MY_NEW_PACKAGE
 ```
 
 ----
-[![Coverage Status](https://coveralls.io/repos/github/dpep/MY_NEW_REPO/badge.svg?branch=main)](https://coveralls.io/github/dpep/MY_NEW_REPO?branch=main)
-[![installs](https://img.shields.io/pypi/dm/MY_NEW_PACKAGE?label=installs)](https://pypi.org/project/MY_NEW_PACKAGE)
+[![Coverage Status](https://coveralls.io/repos/github/dpep/py_factory_bot/badge.svg?branch=main)](https://coveralls.io/github/dpep/py_factory_bot?branch=main)
+[![installs](https://img.shields.io/pypi/dm/factory_bot?label=installs)](https://pypi.org/project/factory_bot)
