@@ -1,0 +1,10 @@
+# Packages
+*.egg
+*.egg-info
+build
+dist
+eggs
+sdist
+*.pyc
+.coverage
+.pytest_cache

@@ -1,0 +1,54 @@
+#!/bin/sh
+
+set -e
+
+package=$(basename `pwd`)
+
+if [ -z "$1" ]; then
+  module="$1"
+else
+  module=$package
+fi
+
+echo $package setup
+
+UPSTREAM=`git rev-parse --abbrev-ref --symbolic-full-name @{u} | cut -d/ -f1`
+URL=`git remote get-url --push $UPSTREAM`
+# remove .git suffix
+URL=${URL%%.git}
+repo="${URL##*/}"
+sed -i '' "s/MY_NEW_REPO/$repo/g" *.md # repo
+
+sed -i '' "1s/MY_NEW_PACKAGE/$module/" README.md # first line
+
+# remaining references
+grep -lr MY_NEW_PACKAGE *.md *.toml .github/*/python.yml  \
+  | xargs sed -i '' "s/MY_NEW_PACKAGE/$package/g"
+
+mkdir $package
+touch $package/$package.py
+
+cat << EOF > $package/__init__.py
+__author__ = 'dpepper'
+__version__ = '0.0.0'
+
+from .$package import *
+
+__all__ = [ '...' ]
+EOF
+
+
+# virtual environment setup
+python -m venv venv
+. venv/bin/activate
+pip install build
+
+
+# purge this setup script
+rm $0
+
+# commit
+git add .
+git commit -m "$package setup"
+git show
+# git push
