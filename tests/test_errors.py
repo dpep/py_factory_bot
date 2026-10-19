@@ -76,6 +76,27 @@ def test_a_double_underscore_override_says_deep_overrides_are_not_supported():
     )
 
 
+def test_a_deep_override_hint_names_the_associations_factory_not_the_attribute():
+    @factory(User)
+    def author():
+        pass
+
+    @dataclass
+    class Article:
+        writer: User
+
+    @factory(Article)
+    def article():
+        f.writer = association("author")
+
+    with pytest.raises(TypeError) as excinfo:
+        build("article", writer__first_name="Bea")
+    assert notes(excinfo)[-1] == (
+        "'writer__first_name': deep overrides aren't supported."
+        ' Override the association instead: writer=association("author", first_name=...)'
+    )
+
+
 def test_an_error_in_a_lazy_attribute_names_the_factory_attribute_and_line():
     @factory(dict)
     def user():

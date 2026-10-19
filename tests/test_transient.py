@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from support.models import User
 
@@ -54,3 +56,18 @@ def test_an_undefined_dependency_of_a_transient_still_points_at_its_line():
         match=r"'greeting' depends on 'nmae'.* \(test_transient\.py:\d+\)$",
     ):
         build("user")
+
+
+def test_an_error_raised_by_a_transient_points_at_its_line():
+    @factory(dict)
+    def user():
+        f.greeting = transient(lambda: 1 / 0)
+        f.card = lambda greeting: greeting
+
+    with pytest.raises(ZeroDivisionError) as excinfo:
+        build("user")
+    assert len(excinfo.value.__notes__) == 1
+    assert re.fullmatch(
+        r"while building factory 'user', attribute 'greeting' \(test_transient\.py:\d+\)",
+        excinfo.value.__notes__[0],
+    )
