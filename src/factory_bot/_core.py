@@ -47,6 +47,22 @@ def attributes_for(name, /, *traits, **overrides):
     return _run("attributes_for", name, traits, overrides)
 
 
+def build_list(name, count, /, *traits, **overrides):
+    return [build(name, *traits, **overrides) for _ in range(count)]
+
+
+def create_list(name, count, /, *traits, **overrides):
+    return [create(name, *traits, **overrides) for _ in range(count)]
+
+
+def build_pair(name, /, *traits, **overrides):
+    return build_list(name, 2, *traits, **overrides)
+
+
+def create_pair(name, /, *traits, **overrides):
+    return create_list(name, 2, *traits, **overrides)
+
+
 def to_create(fn):
     """Persist every created object with fn(obj) instead of obj.save(); None restores the default."""
     global _to_create

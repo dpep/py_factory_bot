@@ -3,6 +3,7 @@
 ## Unreleased
 
 - `create` builds and then saves: `obj.save()` by default, or a global hook set with `to_create(fn)`.
+- `build_list` / `create_list` / `build_pair` / `create_pair`.
 
 ## 0.0.1 - 2026-10-18
 
