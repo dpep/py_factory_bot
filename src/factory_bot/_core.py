@@ -1,9 +1,12 @@
+import collections
+import copy
 import difflib
 import functools
 import inspect
 import itertools
 import os
 import re
+import types
 import weakref
 from collections.abc import Callable
 from contextvars import ContextVar
@@ -403,10 +406,15 @@ class _Evaluator:
             self.noted = e
 
     def call(self, name, fn, *leading):
-        if inspect.iscoroutinefunction(fn) or inspect.isasyncgenfunction(fn):
+        if _is_async(fn):
             raise self.error(
                 f"{name!r} is an async def, so calling it gives a coroutine, not a value."
                 f" Use a plain def, or await it outside the build and pass the result.{_where(fn)}"
+            )
+        if _code_is(fn, inspect.isgeneratorfunction):
+            raise self.error(
+                f"{name!r} is a generator function, so calling it gives a generator, not a value."
+                f" Return a list instead, or wrap it in a lambda to store the generator.{_where(fn)}"
             )
         positional, keyword = _dependencies(fn, len(leading))
         for dep in [*positional, *keyword]:
@@ -421,7 +429,14 @@ class _Evaluator:
                     f"{_suggest(dep, self.plan.definitions)}{_where(fn)}"
                 )
         args = [self.get(dep) for dep in positional]
-        return fn(*leading, *args, **{dep: self.get(dep) for dep in keyword})
+        result = fn(*leading, *args, **{dep: self.get(dep) for dep in keyword})
+        if inspect.iscoroutine(result):
+            result.close()  # else Python warns it was never awaited
+            raise self.error(
+                f"{name!r} returned a coroutine, not a value."
+                f" Await it outside the build and pass the result.{_where(fn)}"
+            )
+        return result
 
     def associate(self, assoc, name=None, given=True):
         name = name or (self.resolving[-1] if self.resolving else None)
@@ -599,34 +614,87 @@ def _persist(evaluator, obj):
     obj.save()
 
 
-def _fresh(value):
-    """Copy through builtin containers so builds never share them.
+# By subclass, not duck type: a MutableMapping like os.environ must not be cloned.
+_CONTAINERS = (dict, list, tuple, set, frozenset, collections.deque)
+
+
+def _fresh(value, memo=None):
+    """Copy through containers so builds never share them, keeping each one's type.
 
     Other objects are used as-is: sessions, models and clients must not be cloned.
     """
-    kind = type(value)  # exact: a subclass may not rebuild from an iterable
-    if kind is dict:
-        return {k: _fresh(v) for k, v in value.items()}
-    if kind in (list, set, tuple):
-        return kind(_fresh(v) for v in value)
-    return value
+    if not isinstance(value, (*_CONTAINERS, bytearray)):
+        return value
+    memo = (
+        {} if memo is None else memo
+    )  # id -> copy: keeps shared and cyclic references
+    if id(value) in memo:
+        return memo[id(value)]
+    if isinstance(value, tuple):
+        items = [_fresh(v, memo) for v in value]
+        if id(value) in memo:  # a cycle through a mutable item copied it already
+            return memo[id(value)]
+        if all(new is old for new, old in zip(items, value, strict=True)):
+            copied = value
+        elif make := getattr(value, "_make", None):  # a namedtuple takes fields
+            copied = make(items)
+        else:
+            copied = type(value)(items)
+        memo[id(value)] = copied
+        return copied
+    # copy.copy keeps a subclass's type and state: default_factory, order, maxlen.
+    if isinstance(value, dict):
+        copied = memo[id(value)] = copy.copy(value)
+        for k, v in value.items():
+            copied[k] = _fresh(v, memo)
+        return copied
+    if isinstance(value, (list, collections.deque)):
+        copied = memo[id(value)] = copy.copy(value)
+        copied.clear()
+        copied.extend(_fresh(v, memo) for v in value)
+        return copied
+    # A set holds only hashables, a bytearray only ints: nothing inside to copy.
+    memo[id(value)] = copy.copy(value)
+    return memo[id(value)]
 
 
-def _marker_in(value):
-    """The first marker in value or the builtin containers in it, without copying anything."""
+def _marker_in(value, seen=None):
+    """The first marker in value or the containers in it, without copying anything."""
     if isinstance(value, _Marker):
         return value
-    kind = type(value)
+    if not isinstance(value, _CONTAINERS):
+        return None
+    seen = set() if seen is None else seen
+    if id(value) in seen:
+        return None
+    seen.add(id(value))
     items = (
-        value.values() if kind is dict else value if kind in (list, set, tuple) else ()
+        itertools.chain.from_iterable(value.items())
+        if isinstance(value, dict)
+        else value
     )
-    return next(filter(None, map(_marker_in, items)), None)
+    return next((m for item in items if (m := _marker_in(item, seen))), None)
 
 
 def _is_lazy(value):
     """Functions are called per build; every other object, callable or not, is stored."""
     # partial is named: it counts as a routine only from 3.14, where it gained __get__.
-    return inspect.isroutine(value) or isinstance(value, functools.partial)
+    # callable: isroutine also counts descriptors, like a cached_property, that can't be called.
+    return callable(value) and (
+        inspect.isroutine(value) or isinstance(value, functools.partial)
+    )
+
+
+def _code_is(fn, *checks):
+    """Whether any of inspect's code checks holds; a Mock(spec=func) fakes the __code__ they read."""
+    try:
+        return any(check(fn) for check in checks)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _is_async(fn):
+    return _code_is(fn, inspect.iscoroutinefunction, inspect.isasyncgenfunction)
 
 
 def _source(value):
@@ -708,7 +776,7 @@ def _suggest(name, options):
 
 def _where(fn, full=False):
     code = getattr(fn, "__code__", None)
-    if not code:
+    if not isinstance(code, types.CodeType):  # a Mock(spec=func) has a fake one
         return ""
     path = code.co_filename if full else os.path.basename(code.co_filename)
     return f" ({path}:{code.co_firstlineno})"

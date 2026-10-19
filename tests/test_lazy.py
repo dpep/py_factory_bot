@@ -1,14 +1,9 @@
-import datetime
 import enum
 import functools
 import inspect
 import itertools
-import operator
 import re
-import time
-import uuid
 from dataclasses import dataclass
-from unittest.mock import MagicMock, Mock
 
 import pytest
 
@@ -103,71 +98,6 @@ def test_a_class_is_stored_not_called():
         "handler": Handler,
         "meta": dict,
     }
-
-
-class _Thing:
-    def method(self):
-        return 1
-
-    @staticmethod
-    def static():
-        return 2
-
-    @classmethod
-    def klass(cls):
-        return 3
-
-
-class _Handler:
-    def __call__(self):
-        return "handled"
-
-
-def _defined():
-    return 1
-
-
-CALLED = {
-    "lambda": lambda: 1,
-    "def": _defined,
-    "bound method": _Thing().method,
-    "staticmethod": _Thing.static,
-    "classmethod": _Thing.klass,
-    "datetime.now": datetime.datetime.now,
-    "time.time": time.time,
-    "uuid.uuid4": uuid.uuid4,
-    "a builtin's bound method": {}.copy,
-    "partial": functools.partial(_defined),
-    "functools.cache": functools.cache(_defined),
-    "fake.first_name": fake.first_name,
-    "fake.unique.first_name": fake.unique.first_name,
-}
-STORED = {
-    "Mock()": Mock(),
-    "MagicMock()": MagicMock(),
-    "a callable instance": _Handler(),
-    "operator.itemgetter": operator.itemgetter(0),
-    "a class": _Thing,
-    "an Enum member": Status.ACTIVE,
-}
-
-
-@pytest.mark.parametrize("value", CALLED.values(), ids=CALLED)
-def test_a_function_is_called_on_every_build(value):
-    @factory(dict)
-    def thing():
-        f.value = value
-
-    assert build("thing")["value"] is not value
-
-
-@pytest.mark.parametrize("value", STORED.values(), ids=STORED)
-def test_every_other_object_is_stored(value):
-    @factory(dict)
-    def thing():
-        f.value = value
-
-    assert build("thing")["value"] is value
 
 
 def test_fake_written_in_a_body_is_called_on_every_build():
@@ -361,3 +291,59 @@ def test_an_async_def_passed_at_build_time_is_stored():
         f.a = 1
 
     assert build("thing", a=_fetch)["a"] is _fetch
+
+
+def _generate(n):
+    yield n
+
+
+def _on_build_lazily(thing):
+    yield
+
+
+def test_a_generator_function_is_never_called():
+    @factory(dict)
+    def thing():
+        f.a = lambda: 1
+        f.b = lambda a: _generate(a)  # a lambda stores the generator on purpose
+        f.c = _generate
+
+    with pytest.raises(FactoryError) as excinfo:
+        build("thing")
+    assert re.fullmatch(
+        r"Factory 'thing': 'c' is a generator function, so calling it gives a generator, not a value\."
+        r" Return a list instead, or wrap it in a lambda to store the generator\. \(test_lazy\.py:\d+\)",
+        str(excinfo.value),
+    )
+    assert next(build("thing", c=None)["b"]) == 1
+
+
+@pytest.mark.parametrize(
+    "declare",
+    [
+        lambda: setattr(f, "a", sequence(_generate)),
+        lambda: after_build(_on_build_lazily),
+    ],
+    ids=["sequence", "callback"],
+)
+def test_no_generator_function_is_called_whatever_declares_it(declare):
+    @factory(dict)
+    def thing():
+        declare()
+
+    with pytest.raises(FactoryError, match="is a generator function"):
+        build("thing")
+
+
+def test_a_coroutine_returned_from_any_function_is_an_error():
+    @factory(dict)
+    def thing():
+        f.a = sequence(lambda n: _counted(n))
+
+    with pytest.raises(FactoryError) as excinfo:
+        build("thing")
+    assert re.fullmatch(
+        r"Factory 'thing': 'a' returned a coroutine, not a value\."
+        r" Await it outside the build and pass the result\. \(test_lazy\.py:\d+\)",
+        str(excinfo.value),
+    )

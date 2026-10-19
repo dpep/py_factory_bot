@@ -45,7 +45,7 @@ When several places set the same attribute, the most specific wins: overrides pa
 ## The value rule
 
 - **Calling:** functions (defs, lambdas, methods, builtins like `datetime.now`, `functools.partial`) are called on every build, with each parameter that has no default filled from the attribute of the same name. Every other object is stored, classes, `Mock()` and callable instances included.
-- **Copying:** lists, dicts, sets and tuples written in a body are copied per build, nested ones too. Anything you pass at build time is used exactly as given, and never called.
+- **Copying:** lists, dicts, sets and tuples written in a body, their subclasses included, plus deques and bytearrays, are copied per build, nested ones too. Anything you pass at build time is used exactly as given, and never called.
 - **Markers:** a `sequence()`, `association()` or `transient()` works only as an attribute's whole value, never returned from a function or inside a container. An override can be a marker too.
 
 ```python
