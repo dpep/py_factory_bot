@@ -1,3 +1,5 @@
+import functools
+
 import pytest
 from support.models import User
 
@@ -111,3 +113,55 @@ def test_a_callback_outside_a_body_says_where_it_works():
         @after_build
         def greet(obj):
             pass
+
+
+def no_parameters():
+    pass
+
+
+def keyword_only(*, user):
+    pass
+
+
+@pytest.mark.parametrize(
+    "callback, shown",
+    [
+        (no_parameters, r"no_parameters\(\)"),
+        (keyword_only, r"keyword_only\(\*, user\)"),
+    ],
+)
+def test_a_callback_that_cannot_take_the_instance_is_rejected(callback, shown):
+    message = (
+        rf"^Factory 'user': @after_build def {shown} must take the instance first,"
+        rf" then other attributes by name: def {callback.__name__}\(user, \.\.\.\)$"
+    )
+    with pytest.raises(FactoryError, match=message):
+
+        @factory(User)
+        def user():
+            after_build(callback)
+
+
+def test_a_partial_is_accepted_as_a_callback():
+    @factory(User)
+    def user():
+        after_build(functools.partial(lambda calls, user: None, []))
+
+
+@pytest.mark.xfail(
+    raises=AttributeError,
+    reason="lane A: _core._run_callbacks reads callback.__name__",
+)
+def test_a_partial_callback_runs():
+    def record(calls, user, first_name):
+        calls.append(first_name)
+
+    calls = []
+
+    @factory(User)
+    def user():
+        f.first_name = "Ann"
+        after_build(functools.partial(record, calls))
+
+    build("user")
+    assert calls == ["Ann"]
