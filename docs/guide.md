@@ -304,7 +304,7 @@ seed(1234)
 assert build(profile) == first
 ```
 
-`seed(value)` makes the data reproducible outside pytest; it also clears `fake.unique`. Under pytest, the plugin seeds for you. `fake` is the only randomness it seeds, so prefer `fake.random_element(...)` to `random.choice(...)`.
+`seed(value)` makes the data reproducible outside pytest; it also clears `fake.unique`. Under pytest, the plugin seeds for you; a test or fixture that calls `seed()` itself keeps that seed for the rest of the test. Use `factory_bot.seed`, not `Faker.seed()`: that seeds Faker's shared generator, which `fake` stops using once seeded. `fake` is the only randomness it seeds, so prefer `fake.random_element(...)` to `random.choice(...)`.
 
 
 ## Gotchas

@@ -68,7 +68,12 @@ def _guard(name, method):
 fake: Faker = _Fake()
 
 
+_generation = 0  # counts seed() calls, so the pytest plugin can tell a fixture seeded
+
+
 def seed(value: float | str | bytes | None) -> None:
     """Seed `fake` so a test's generated data is reproducible, `fake.unique` included."""
+    global _generation
+    _generation += 1
     fake.seed_instance(value)
     fake.unique.clear()  # its seen-values would otherwise make output depend on history

@@ -4,7 +4,7 @@ reset sequences. Disable with -p no:factory_bot."""
 
 import pytest
 
-from factory_bot import _core, fake, reset_sequences, seed
+from factory_bot import _core, _fake, fake, reset_sequences, seed
 
 DEFAULT_SEED = 0
 
@@ -46,7 +46,7 @@ def pytest_fixture_setup(fixturedef, request):
 
     # Registered before setup so it runs after the fixture's own teardown (finalizers are LIFO).
     request.addfinalizer(restore_hook)
-    state = fake.random.getstate()
+    state, generation = fake.random.getstate(), _fake._generation
     fake.seed_instance(
         f"{_seed(request.config)}:{request.node.nodeid}::{fixturedef.argname}"
     )
@@ -54,8 +54,10 @@ def pytest_fixture_setup(fixturedef, request):
         return (yield)
     finally:
         after = _core._persist_hook
-        # Resume the stream the setup interrupted: the requesting test's data stays its own.
-        fake.random.setstate(state)
+        # Resume the stream the setup interrupted, so the requesting test's data stays its
+        # own; unless the fixture called seed(), which is the stream it chose.
+        if _fake._generation == generation:
+            fake.random.setstate(state)
 
 
 @pytest.fixture(autouse=True)

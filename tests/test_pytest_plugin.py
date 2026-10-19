@@ -381,3 +381,34 @@ def test_a_session_fixture_set_up_after_an_autouse_hook_does_not_restore_it(
     result = pytester.runpytest("-s", "-p", "no:randomly", "-p", "no:faker")
     result.assert_outcomes(passed=1)
     assert names(result)["test_session_end"] == "at_import"
+
+
+# A fixture's seed() is the fixture's own change: the plugin's restore must not undo it.
+
+SEEDED = """
+import pytest
+from factory_bot import fake, seed
+
+@pytest.fixture(autouse=__AUTOUSE__)
+def pinned():
+    seed(42)
+
+@pytest.fixture
+def plain():
+    return fake.name()
+
+def test_seeded(pinned, plain):
+    print(f"test_seeded={fake.name()}")
+
+def test_expected():
+    seed(42)
+    print(f"test_expected={fake.name()}")
+"""
+
+
+@pytest.mark.parametrize("autouse", [True, False])
+def test_seed_in_a_fixture_pins_the_data_after_it(pytester, autouse):
+    # plain still draws from its own seed and resumes the pinned stream after it.
+    pytester.makepyfile(test_seeded=SEEDED.replace("__AUTOUSE__", str(autouse)))
+    data = names(run(pytester))
+    assert data["test_seeded"] == data["test_expected"]

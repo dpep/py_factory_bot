@@ -1,4 +1,5 @@
 import inspect
+import random
 
 import pytest
 from faker import Faker
@@ -35,6 +36,20 @@ def test_seed_resets_fake_unique_so_the_same_seed_gives_the_same_values():
     first = [fake.unique.random_int(1, 5) for _ in range(4)]
     seed(1234)
     assert [fake.unique.random_int(1, 5) for _ in range(4)] == first
+
+
+def test_faker_seed_does_not_seed_fake_once_seed_has():
+    # Faker.seed seeds Faker's shared Random (and the random module); fake has its own from
+    # its first seed() on, which the pytest plugin makes before every test. The docs say so.
+    state = random.getstate()
+    try:
+        seed(1)
+        Faker.seed(0)
+        first = [fake.name() for _ in range(5)]
+        Faker.seed(0)
+        assert [fake.name() for _ in range(5)] != first
+    finally:
+        random.setstate(state)
 
 
 # Frozen calls: a provider called while a body runs would hand every build one value.
