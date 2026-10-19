@@ -421,16 +421,21 @@ def _persist(evaluator, fac, obj):
     obj.save()
 
 
-def _fresh(value):
+def _fresh(value, container: type | None = None):
     """Copy through builtin containers so builds never share them.
 
     Other objects are used as-is: sessions, models and clients must not be cloned.
     """
     kind = type(value)  # exact: a subclass may not rebuild from an iterable
     if kind is dict:
-        return {k: _fresh(v) for k, v in value.items()}
+        return {k: _fresh(v, kind) for k, v in value.items()}
     if kind in (list, set, tuple):
-        return kind(_fresh(v) for v in value)
+        return kind(_fresh(v, kind) for v in value)
+    # A whole value is never a marker here: evaluate takes those first.
+    if container and isinstance(value, _Marker):
+        raise FactoryError(
+            f"{value!r} is inside a {container.__name__}, so it was never evaluated: {_MARKER_RULE}"
+        )
     return value
 
 

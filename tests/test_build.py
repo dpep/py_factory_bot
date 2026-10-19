@@ -3,7 +3,15 @@ import re
 import pytest
 from support.models import User
 
-from factory_bot import FactoryError, build, build_list, f, factory
+from factory_bot import (
+    FactoryError,
+    association,
+    build,
+    build_list,
+    f,
+    factory,
+    transient,
+)
 
 
 def test_builds_the_model_from_static_attributes():
@@ -143,3 +151,31 @@ def test_duplicate_factory_names_are_rejected():
         @factory(User)
         def user():
             pass
+
+
+def test_a_marker_inside_a_container_is_an_error():
+    @factory(dict)
+    def author():
+        f.name = "Ann"
+
+    @factory(dict)
+    def post():
+        f.authors = [association("author")]
+
+    rule = (
+        r", so it was never evaluated: a sequence\(\), association\(\) or transient\(\)"
+        r" works only as an attribute's whole value"
+    )
+    with pytest.raises(
+        FactoryError,
+        match=rf"^Factory 'post': <association 'author'> is inside a list{rule}",
+    ) as excinfo:
+        build("post")
+    assert excinfo.value.__notes__ == [
+        "while building factory 'post', attribute 'authors'"
+    ]
+
+    with pytest.raises(
+        FactoryError, match=rf"^Factory 'author': <transient 1> is inside a dict{rule}"
+    ):
+        build("author", name={"first": transient(1)})
