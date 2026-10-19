@@ -290,6 +290,13 @@ class _Evaluator:
 
 
 def _run(strategy, name, traits, overrides, via=None):
+    from ._dsl import _defining  # _dsl imports _core
+
+    if _defining():
+        raise FactoryError(
+            f"{strategy}({name!r}) ran while a factory was being defined, so it would run once, at import."
+            f" Make it lazy: lambda: {strategy}({name!r}), or use association({name!r})"
+        )
     fac = _lookup(name)
     layers = fac.layers(traits)
     evaluator = _Evaluator(strategy, fac.name, layers, overrides, via)

@@ -1,7 +1,7 @@
 import pytest
-from support.models import User
+from support.models import Post, User
 
-from factory_bot import FactoryError, create, f, factory, to_create, trait
+from factory_bot import FactoryError, build, create, f, factory, to_create, trait
 
 
 def test_create_builds_then_saves():
@@ -91,3 +91,37 @@ def test_to_create_inside_a_trait_is_rejected():
             @trait
             def stored():
                 to_create(print)
+
+
+def test_create_while_a_factory_is_being_defined_is_an_error():
+    @factory(User)
+    def user():
+        pass
+
+    message = (
+        r"^create\('user'\) ran while a factory was being defined, so it would run once, at import\."
+        r" Make it lazy: lambda: create\('user'\), or use association\('user'\)$"
+    )
+    with pytest.raises(FactoryError, match=message):
+
+        @factory(Post)
+        def post():
+            f.author = create("user")
+
+    with pytest.raises(FactoryError, match=r"^build\('user'\) ran while"):
+
+        @factory(Post)
+        def draft():
+            f.author = build("user")
+
+
+def test_create_in_a_lazy_attribute_runs_at_build_time():
+    @factory(User)
+    def user():
+        pass
+
+    @factory(Post)
+    def post():
+        f.author = lambda: create("user")
+
+    assert create("post").author.saved

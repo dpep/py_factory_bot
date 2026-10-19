@@ -21,6 +21,7 @@
 - Fix: a `sequence(...)` passed as an override gives its next value instead of reaching the model as a raw object.
 - Fix: a lazy attribute's positional-only parameters (`lambda name, /: ...`) are injected like the others.
 - An exception from a model or a lazy attribute keeps its type and gains a note naming the factory, plus the attribute and its file:line. A model's unknown-keyword `TypeError` also suggests the factory attribute you probably meant.
+- `build(...)` or `attributes_for(...)` called directly in a factory body is now an error: it ran once at definition time, so every build shared one object. Wrap it in a lambda (`f.author = lambda: build("user")`) or use `association("user")`.
 <!-- /lane -->
 
 ## 0.0.1 - 2026-10-18
