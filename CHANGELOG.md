@@ -9,7 +9,6 @@
 - Drop the parentheses from `fake` calls in bodies (`f.name = fake.first_name`), or wrap a call that needs arguments in a lambda. Applies if a body calls `fake.x()`: that gave every build the same value, and is now an error.
 - Replace `build(...)` or `attributes_for(...)` called directly in a body with `association(...)`, or wrap it in a lambda. Applies if a body calls one: it ran once, at import, so every build shared one object. It's now an error.
 - Rename or remove one of the two. Applies if a factory defines two traits with the same name: the second used to replace the first silently, and is now an error.
-- Read the value back from the built object. Applies if you pass a list, dict, set or tuple as an override and rely on the model holding that same object: overrides are now copied, like declared values.
 - Remove a `seed()` call made once for the whole run, or disable the plugin with `-p no:factory_bot`. Applies if you seed `fake` in a conftest: the new pytest plugin reseeds before every test.
 - Install Django or SQLAlchemy yourself. Applies if you installed `factory_bot[django]` or `factory_bot[sqlalchemy]`: the extras are gone, since factory_bot never imports either.
 
@@ -31,7 +30,9 @@
 
 ### Changed
 
-- Every list, dict, set and tuple, nested ones included, is copied per build, so `f.settings = {"roles": []}` no longer leaks between tests.
+<!-- lane: sus2-core -->
+- Every list, dict, set and tuple written in a body, nested ones included, is copied per build, so `f.settings = {"roles": []}` no longer leaks between tests. Anything you pass at build time is used exactly as given.
+<!-- /lane -->
 - A `sequence`, `association` or `transient` passed as an override is evaluated, not passed to the model as a raw object.
 - A marker inside a container, or returned from a lambda, is an error naming the attribute, instead of reaching the model unevaluated.
 - `seed()` also clears `fake.unique`, so the same seed gives the same data whatever ran before.

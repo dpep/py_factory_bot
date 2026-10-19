@@ -143,8 +143,8 @@ ROWS = {
         {
             "definitions": {
                 **USER,
-                "name": "sequence",
-                "boss": "<association 'plain'>",
+                "name": "given sequence",
+                "boss": "given <association 'plain'>",
             }
         },
     ),
@@ -159,7 +159,7 @@ ROWS = {
         (),
         {"seed": transient(3)},
         {
-            "definitions": {"x": "1", "seed": "transient 3"},
+            "definitions": {"x": "1", "seed": "given transient 3"},
             "transients": {"seed"},
             "declared": {"x"},
         },

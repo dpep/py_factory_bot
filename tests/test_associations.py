@@ -162,6 +162,16 @@ def test_an_association_cycle_names_the_chain():
         build("post")
 
 
+def test_an_association_cycle_is_found_though_its_overrides_are_copied_per_build():
+    @factory(dict)
+    def node():
+        f.parent = association("node", tags=[])
+
+    message = r"^Factory 'node': circular association: node\.parent -> node\.parent\n"
+    with pytest.raises(FactoryError, match=message):
+        build("node")
+
+
 def test_an_association_cycle_through_a_lazy_attribute_names_the_chain():
     @factory(dict)
     def user():

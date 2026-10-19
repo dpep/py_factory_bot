@@ -214,12 +214,11 @@ class _Definition:
         """The lineage, then the named traits, then the overrides: later layers win."""
         lineage = self.lineage()
         layers = [*lineage, *self._find_traits(trait_names)]
-        # A marker in an override evaluates like a definition; anything else is a plain value.
-        given = {
-            n: v if isinstance(v, _Marker) else _Given(v) for n, v in overrides.items()
+        values = [*(layer.attributes for layer in layers), overrides]
+        given = {n: _Given(v) for n, v in overrides.items()}
+        definitions = {
+            n: v for layer in [*values[:-1], given] for n, v in layer.items()
         }
-        values = [*(layer.attributes for layer in layers), given]
-        definitions = {n: v for layer in values for n, v in layer.items()}
         return _Plan(
             factory=self.name,
             definitions=definitions,
@@ -258,7 +257,7 @@ class _Plan:
     """One build's declarations, every layer applied: which value wins for each name, and its kind."""
 
     factory: str
-    # In declaration order. Overrides are wrapped in _Given, unless a marker.
+    # In declaration order. Overrides are wrapped in _Given.
     definitions: dict[str, Any]
     # Transient in any layer stays transient, whatever a later layer assigns.
     transients: set[str]
@@ -327,7 +326,7 @@ class _Transient(_Marker):
 
 
 class _Given:
-    """An override's plain value: used as given, even when callable."""
+    """A value passed at build time: never copied, and never called unless it is a marker."""
 
     def __init__(self, value):
         self.value = value
@@ -376,18 +375,20 @@ class _Evaluator:
             self.resolving.pop()
         return self.values[name]
 
-    def evaluate(self, name, value):
+    def evaluate(self, name, value, given=False):
         if isinstance(value, _Given):
-            return _fresh(value.value)
+            if not isinstance(value.value, _Marker):
+                return value.value
+            value, given = value.value, True
         if isinstance(value, _Transient):
-            return self.evaluate(name, value.value)
+            return self.evaluate(name, value.value, given)
         if isinstance(value, _Sequence):
             return self.call(name, value.fn, next(value.counter))
         if isinstance(value, _Association):
-            return self.associate(value, name)
+            return self.associate(value, name, given)
         if _is_lazy(value):
             return self.call(name, value)
-        return _fresh(value)
+        return value if given else _fresh(value)
 
     def error(self, message):
         """A FactoryError raised by this build: its message says where, so it needs no note here."""
@@ -416,7 +417,7 @@ class _Evaluator:
         args = [self.get(dep) for dep in positional]
         return fn(*leading, *args, **{dep: self.get(dep) for dep in keyword})
 
-    def associate(self, assoc, name=None):
+    def associate(self, assoc, name=None, given=True):
         name = name or (self.resolving[-1] if self.resolving else None)
         if assoc.name not in _registry:
             what = f"{name!r} is an association" if name else "an association"
@@ -426,7 +427,8 @@ class _Evaluator:
             )
         # attributes_for omits associations, but a dependent attribute may still need the object.
         strategy = "create" if self.strategy == "create" else "build"
-        # The same association with the same overrides, inside itself, never ends.
+        # The same association with the same overrides, inside itself, never ends. The
+        # key is the marker's own overrides: a per-build copy would never repeat.
         key = (
             assoc.name,
             assoc.traits,
@@ -440,7 +442,8 @@ class _Evaluator:
                 raise self.error(
                     f"circular association: {' -> '.join([*chain, label])}"
                 )
-        return _run(strategy, assoc.name, assoc.traits, assoc.overrides, (label, key))
+        overrides = {k: v if given else _fresh(v) for k, v in assoc.overrides.items()}
+        return _run(strategy, assoc.name, assoc.traits, overrides, (label, key))
 
 
 def _run(strategy, factory, traits, overrides, via=None):
@@ -622,7 +625,7 @@ def _is_lazy(value):
 
 def _source(value):
     """The function behind a definition, to point at its line."""
-    if isinstance(value, _Transient):
+    if isinstance(value, (_Given, _Transient)):
         return _source(value.value)
     return value.fn if isinstance(value, _Sequence) else value
 
