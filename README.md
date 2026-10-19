@@ -2,7 +2,7 @@
 
 Generate realistic test data with ease.
 
-Describe your test data once, and every test can ask for it by name: `build("user")`, `create("user", "admin", first_name="Jane")`, `build_list("post", 3)`. Each test spells out only the fields it cares about, and the factory fills in the rest, with believable fake values from [Faker](https://faker.readthedocs.io) when you ask for them. It works with anything that takes keyword arguments: plain classes, dataclasses, dicts, Django and SQLAlchemy models. Under pytest, fake data is reseeded for every test, so a test gets the same names and emails whether it runs alone, in the suite, or in a different order.
+Describe your test data once, and every test can ask for it: `build(user)`, `create(user, "admin", first_name="Jane")`, `build_list(post, 3)`. Each test spells out only the fields it cares about, and the factory fills in the rest, with believable fake values from [Faker](https://faker.readthedocs.io) when you ask for them. It works with anything that takes keyword arguments: plain classes, dataclasses, dicts, Django and SQLAlchemy models. Under pytest, fake data is reseeded for every test, so a test gets the same names and emails whether it runs alone, in the suite, or in a different order.
 
 Early development: the API is still settling.
 
@@ -12,8 +12,6 @@ Early development: the API is still settling.
 ```
 pip install factory_bot
 ```
-
-Python 3.11 or later.
 
 
 ## Quick start
@@ -48,21 +46,23 @@ def user():
         f.admin = True
 
 
-build("user")
+build(user)
 # User(first_name='Diane', last_name='Butler', email='Diane.Butler@example.com', username='user1', admin=False)
 
-create("user", "admin", first_name="Jane")
+create(user, "admin", first_name="Jane")
 # User(first_name='Jane', last_name='Turner', email='Jane.Turner@example.com', username='user2', admin=True)
 ```
 
-A factory is a function that assigns attributes to `f`. Its body runs once, when it's defined, and records what each attribute should be; every `build` then makes a fresh object from that record. Overrides, like `first_name="Jane"`, win over everything, and attributes that depend on them (`email`) follow along.
+A factory is a plain function that assigns attributes to `f`: no classes, no `Meta`. Its body runs once and records what each attribute should be; every `build` makes a fresh object from that record. Overrides like `first_name="Jane"` win, and attributes that depend on them, like `email`, follow along.
+
+`@factory` returns the factory itself, so `build(user)` is typed as a `User`. Its name works too: `build("user")`.
 
 
 ## Tour
 
-### Lazy attributes and dependencies
+### Dependencies by name
 
-A static value is used as-is, and so is a class. Any other callable is called on every build, and its parameters are filled with the other attributes of the same name, so one attribute can depend on another.
+A callable is called on every build, and each parameter is filled with the attribute of the same name. Declaration order doesn't matter.
 
 ```python
 @factory(dict)
@@ -72,24 +72,69 @@ def account():
     f.url = lambda slug: f"https://example.com/{slug}"
 
 
-assert build("account")["url"] == "https://example.com/ann-lee"
-assert build("account", name="Bea Kim")["url"] == "https://example.com/bea-kim"
+assert build(account)["url"] == "https://example.com/ann-lee"
+assert build(account, name="Bea Kim")["url"] == "https://example.com/bea-kim"
 ```
 
-Only parameters without defaults are filled, and order of declaration doesn't matter. The [guide](https://github.com/dpep/py_factory_bot/blob/main/docs/guide.md#the-value-rule) has the full rule.
+A typo in a parameter name tells you where it is: `Factory 'account': 'url' depends on 'slgu', which is not defined. Did you mean 'slug'? (factories.py:5)`.
+
+### Transients and callbacks
+
+A transient is an input the model never sees. Callbacks get the built object first, then any attributes they name, transients included.
+
+```python
+from factory_bot import after_build, transient
+
+
+@factory(dict)
+def badge():
+    f.label = "new"
+    f.loud = transient(False)
+
+    @after_build
+    def maybe_shout(badge, loud):
+        if loud:
+            badge["label"] = badge["label"].upper()
+
+
+assert build(badge) == {"label": "new"}
+assert build(badge, loud=True) == {"label": "NEW"}
+```
+
+`@after_create` runs after the save. A transient count plus an `@after_create` that calls `create_list` is how you make an author with three books: see the [has-many recipe](https://github.com/dpep/py_factory_bot/blob/main/docs/guide.md#has-many).
+
+### The same data alone or in the suite
+
+The pytest plugin is on as soon as factory_bot is installed. Before each test it reseeds `fake` from the run's seed and the test's id, so a test's fake data doesn't depend on what ran before it. The seed is in the header:
+
+```
+factory_bot: seed=0
+```
+
+With [pytest-randomly](https://github.com/pytest-dev/pytest-randomly), its seed drives this one: each run gets new data, and `--randomly-seed=N` replays a run's.
+
+Sequences keep counting across tests, so suites that keep rows between tests don't collide on unique columns. If every test rolls back, restart them per test:
+
+```toml
+[tool.pytest.ini_options]
+factory_bot_reset_sequences = true
+```
+
+To turn the plugin off, run `pytest -p no:factory_bot`.
 
 ### Sequences
 
-For values that must be unique, `sequence` counts up from 1, one step per build.
+`sequence` counts up from 1, one step per build. Its function gets the number first, then any attributes it names.
 
 ```python
 @factory(dict)
-def ticket():
-    f.code = sequence(lambda n: f"T-{n:04}")
+def page():
+    f.title = "Hello World"
+    f.slug = sequence(lambda n, title: f"{title.lower().replace(' ', '-')}-{n}")
 
 
-assert build("ticket") == {"code": "T-0001"}
-assert build("ticket") == {"code": "T-0002"}
+assert build(page)["slug"] == "hello-world-1"
+assert build(page, title="About")["slug"] == "about-2"
 ```
 
 Each sequence keeps its own count, an override doesn't use up a number, and `reset_sequences()` starts every count over.
@@ -106,7 +151,6 @@ from datetime import datetime
 def post():
     f.title = "Hello"
     f.status = "draft"
-    f.published_at = None
 
     @trait
     def published():
@@ -118,13 +162,13 @@ def post():
         f.pinned = True
 
 
-assert build("post", "published", "pinned")["status"] == "published"
-assert build("post", "published", status="archived")["status"] == "archived"
+assert build(post, "published", "pinned")["status"] == "published"
+assert build(post, "published", status="archived")["status"] == "archived"
 ```
 
 ### Child factories
 
-A bare `@factory` nested in another declares a child: it inherits the parent's model, attributes, traits, sequences and callbacks, and changes what it needs. Nest `@factory(OtherModel)` to switch model too.
+A bare `@factory` nested in another declares a child. It inherits the parent's model, attributes, traits, sequences and callbacks, and changes what it needs. Nest `@factory(OtherModel)` to switch model too.
 
 ```python
 @factory(dict)
@@ -140,11 +184,11 @@ def member():
 assert build("moderator") == {"name": "Ann", "role": "moderator"}
 ```
 
-Children are registered under their own name, so `build("moderator")`, not `build("member.moderator")`.
+A child is reached by its name: `build("moderator")`.
 
 ### Associations
 
-`association` gives an attribute another factory's object, with traits and overrides of its own. It follows the parent's strategy: `build` builds it, `create` creates it first, so it's saved before the row that points at it.
+`association` gives an attribute another factory's object, with traits and overrides of its own. It follows the parent's strategy: `build` builds it, and `create` creates it first, so it's saved before the row that points at it.
 
 ```python
 from factory_bot import association
@@ -162,58 +206,14 @@ def author():
 @factory(dict)
 def book():
     f.title = "Dune"
-    f.author = association("author", "famous", name="Frank")
+    f.author = association(author, "famous", name="Frank")
 
 
-assert build("book") == {
-    "title": "Dune",
-    "author": {"name": "Frank", "followers": 1_000_000},
-}
+assert build(book)["author"] == {"name": "Frank", "followers": 1_000_000}
+assert build(book, author_id=7) == {"title": "Dune", "author_id": 7}
 ```
 
-Pass your own to skip it: `build("book", author=frank)`.
-
-### Transients
-
-A transient is an input other attributes can depend on that never reaches the model.
-
-```python
-from factory_bot import transient
-
-
-@factory(dict)
-def greeting():
-    f.loud = transient(False)
-    f.text = lambda loud: "HELLO" if loud else "hello"
-
-
-assert build("greeting") == {"text": "hello"}
-assert build("greeting", loud=True) == {"text": "HELLO"}
-```
-
-### Callbacks
-
-`@after_build` runs on the built object; `@after_create` runs after it's saved. A callback gets the object first, then any attributes it names, transients included.
-
-```python
-from factory_bot import after_build
-
-
-@factory(dict)
-def badge():
-    f.label = "new"
-    f.shout = transient(False)
-
-    @after_build
-    def maybe_shout(badge, shout):
-        if shout:
-            badge["label"] = badge["label"].upper()
-
-
-assert build("badge", shout=True) == {"label": "NEW"}
-```
-
-Callbacks run in definition order: parent, then child, then traits.
+Pass your own object with `author=`, or pass `author_id=` to skip making one.
 
 ### Strategies
 
@@ -222,19 +222,17 @@ Every strategy takes traits and overrides the same way.
 ```python
 from factory_bot import attributes_for, build_list, create_list
 
-build("user")  # an object, not saved
-create("user")  # built, then saved
-attributes_for("user")  # a dict of attributes: no object, no callbacks, no associations
-build_list("user", 3, "admin")  # three users; create_list saves each
+build(user)  # an object, not saved
+create(user)  # built, then saved
+attributes_for(user)  # a dict: no object, no callbacks
+build_list(user, 3, "admin")  # three users; create_list saves each
 ```
 
-`attributes_for` leaves out transients and associations, which makes it handy for a form or a constructor. The values are Python objects (dates stay dates), so serialize them yourself before sending JSON.
+`attributes_for` leaves out transients, and associations you didn't pass. Values stay Python objects, so serialize them yourself before sending JSON.
 
 ### Persistence
 
-`create` builds the object, then saves it. By default that means calling `obj.save()`, which is all a Django model needs: there's nothing to configure.
-
-For anything else, use `persist_with`. It takes a function, called with each created object; or a SQLAlchemy session; or `None`, which puts `obj.save()` back. It applies to every factory, across the whole process.
+`create` builds, then saves: `obj.save()` by default, which is all a Django model needs. For anything else, call `persist_with` with a function, or with a SQLAlchemy session, which gets each object added and flushed, never committed. `persist_with(None)` puts `obj.save()` back.
 
 ```python
 from factory_bot import persist_with
@@ -248,23 +246,16 @@ def event():
     f.name = "launch"
 
 
-create("event")
+create(event)
 assert saved == [{"name": "launch"}]
 persist_with(None)
 ```
 
-For SQLAlchemy, pass the test's session. Each created object is added and flushed, so ids and foreign keys are set, but nothing is committed: your test's transaction still decides.
-
-<!-- skip-doctest -->
-```python
-persist_with(session)
-```
-
-The pytest plugin puts the previous setting back after each test, so a function-scoped fixture can call it without teardown. The [guide](https://github.com/dpep/py_factory_bot/blob/main/docs/guide.md#sqlalchemy-fixtures) has the full fixture.
+The setting is global. The pytest plugin puts it back after each test, so a fixture can call `persist_with(session)` without cleaning up. The [guide](https://github.com/dpep/py_factory_bot/blob/main/docs/guide.md#sqlalchemy-fixtures) has the full SQLAlchemy fixture.
 
 ### Faker
 
-`fake` is a shared [Faker](https://faker.readthedocs.io) instance, so every Faker provider works. Assign the method without calling it, and you get a new value on every build. Need arguments? Wrap it in a lambda.
+`fake` is a shared [Faker](https://faker.readthedocs.io) instance, so every Faker provider works. Assign the method without calling it and you get a new value on every build; for arguments, use a lambda. Calling it in the body would freeze one value for every build, so that's an error.
 
 ```python
 from factory_bot import fake, seed
@@ -273,41 +264,33 @@ from factory_bot import fake, seed
 @factory(dict)
 def profile():
     f.name = fake.name
-    f.bio = fake.sentence
     f.age = lambda: fake.random_int(min=18, max=90)
 
 
 seed(1234)
-first = build("profile")
+first = build(profile)
 seed(1234)
-assert build("profile") == first
+assert build(profile) == first
 ```
 
-`seed(value)` makes the data reproducible. Under pytest you rarely need it, because the plugin seeds for you.
+`seed(value)` makes the data reproducible outside pytest.
 
-### pytest
+### Checking every factory
 
-Install factory_bot and its pytest plugin is on. Before each test it reseeds `fake` from the run's seed and the test's id, so a test's fake data is the same alone, in the suite, or in any order, while each test still gets data of its own. The seed is in the header:
+`lint()` builds every factory once, and once with each trait, then reports every failure together, each as a call you can paste into a test.
 
+```python
+from factory_bot import lint
+
+
+def test_factories():
+    lint()
 ```
-factory_bot: seed=0
-```
-
-With [pytest-randomly](https://github.com/pytest-dev/pytest-randomly) installed, its seed drives this one too: each run gets new data, and `--randomly-seed=N` replays a run's.
-
-Sequences keep counting across tests, so suites that keep rows between tests don't collide on unique columns. If every test rolls back, as with Django's `TestCase`, restart them per test:
-
-```toml
-[tool.pytest.ini_options]
-factory_bot_reset_sequences = true
-```
-
-To turn the plugin off, run `pytest -p no:factory_bot`.
 
 
 ## Learn more
 
-The [guide](https://github.com/dpep/py_factory_bot/blob/main/docs/guide.md) covers the value rule, the gotchas, organizing factories, test isolation, recipes for has-many, Django many-to-many, passwords, unique slugs and SQLAlchemy fixtures, what each error message means, and tips for type checkers.
+The [guide](https://github.com/dpep/py_factory_bot/blob/main/docs/guide.md) covers the value rule, the gotchas, associations in depth, organizing factories, test isolation, type checkers, recipes, and what each error message means.
 
 Inspired by thoughtbot's [factory_bot](https://github.com/thoughtbot/factory_bot) for Ruby.
 

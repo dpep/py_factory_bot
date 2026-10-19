@@ -2,36 +2,42 @@
 
 ## Unreleased
 
-- `create` builds and then saves: `obj.save()` by default, or as set globally with `persist_with`: a function called with each object, a SQLAlchemy session, or `None` for `obj.save()` again.
-- `build_list` / `create_list`.
-- `association("user", *traits, **overrides)` builds or creates another factory's object to match the parent; `attributes_for` leaves it out.
-- `transient(value)` declares an input other attributes can depend on, kept out of the model and `attributes_for`.
-- Breaking: factory and trait bodies take no parameters. Drop the `f` parameter, import it instead (`from factory_bot import f`), and write `@trait` instead of `@f.trait`. An old-style body raises an error showing the new form.
-- Child factories: a bare `@factory` nested in a factory body inherits its model, attributes, traits and sequences; nest `@factory(Model)` to switch model.
-- `@after_build` / `@after_create` callbacks get the instance first and other attributes, transients included, by parameter name. They run in definition order: parent, child, then traits.
-- SQLAlchemy: `persist_with(session)` adds and flushes each created object without committing, so the test's transaction still decides. Takes a `Session` or `scoped_session`.
-- pytest plugin, on by default: `fake` is reseeded before each test from the test's node id, so its data is the same alone, in the suite or in any order (a module- or session-scoped fixture's data is not: it takes the seed of the first test that uses it); with pytest-randomly, `--randomly-seed` drives it. Set `factory_bot_reset_sequences = true` to restart sequences per test. Disable with `-p no:factory_bot`.
-- `seed()` also forgets the values `fake.unique` has handed out, so the same seed gives the same data whatever ran before. Under the pytest plugin each test starts with a fresh unique pool, so a test no longer fails with `UniquenessException` depending on which tests ran first.
-- A second trait with the same name in one factory is an error naming where the first is defined; it used to replace the first silently. A child may still redefine its parent's trait.
-- Fix: each build gets its own copy of every list, dict, set and tuple, nested ones included, so `f.settings = {"roles": []}` no longer leaks between tests. Overrides are copied the same way, so the model holds a copy of a list you pass, not the list itself. Other objects are shared between builds: use a lambda for a fresh one.
-- Fix: a `sequence(...)` passed as an override gives its next value instead of reaching the model as a raw object.
-- Fix: a `sequence(...)` or `transient(...)` returned from a lazy attribute, as in `f.code = lambda: sequence(...)`, is an error naming the attribute, instead of reaching the model as a raw object. Assign the marker itself: `f.code = sequence(...)`. So is a marker inside a list, dict, set or tuple, as in `f.authors = [association("author")]`; for a list of associations, build it in a lambda: `lambda: [association("author")]`.
-- Fix: a lazy attribute's positional-only parameters (`lambda name, /: ...`) are injected like the others.
-- An exception from a model or a lazy attribute keeps its type and gains a note naming the factory, plus the attribute and its file:line. A model's unknown-keyword `TypeError` also suggests the factory attribute you probably meant.
-- A `FactoryError` raised while a factory's body runs or while it builds names that factory, the innermost one when builds nest. `f.book = lambda: build("nope")` now says `Factory 'shelf': No factory named 'nope'.` Like other exceptions, it also gains a note from each build it passes through, so a failure deep in an association shows the attributes that led to it.
-- `build(...)`, `create(...)` or `attributes_for(...)` called directly in a factory body is now an error: it ran once at definition time, so every build shared one object. Use `association("user")`, which builds or creates to match the parent, or wrap it in a lambda (`f.author = lambda: build("user")`).
-- "Factory 'user' is already defined" shows the first definition's full path, and points at `clear_factories()` for redefining in a REPL or after a reload.
-<!-- lane: r2-fake -->
-- `fake.x()` inside a factory or trait body is now an error: it ran once, at definition, so every build got the same value. Drop the parentheses (`f.name = fake.first_name`), or wrap a call with arguments in a lambda. `fake.unique.x()` and `fake.optional.x()` are caught too; calls in lambdas, callbacks and at module level are unchanged.
-- pytest plugin: a `persist_with` hook set by a test or one of its function-scoped fixtures is undone after the test, so a fixture that sets it without teardown can no longer leak a closed session into later tests. A hook set at import (in a conftest) or by a session-, module- or class-scoped fixture stays: undo those in the fixture's own teardown.
-<!-- /lane -->
-<!-- lane: r2-core -->
-- `@factory(User)` returns the factory itself, a `Factory[User]`. Pass it wherever a factory's name goes, `build(user)` or `association(user)`, and a type checker knows the result is a `User`; a name still works and gives `Any`. Nothing to change: calling the old return value never worked.
-- Breaking: a class assigned as a value is stored, not called on each build, so `f.status = Status` gives the `Enum` class and `f.kind = Decimal` gives `Decimal`. If you relied on a class being instantiated per build, write `lambda: SomeClass()`. Other callables are still called.
-- `lint(*factories, strategy="build", traits=True)` builds every factory (or those given) once, then once with each of its traits, inherited ones included, and raises one `FactoryError` listing every call that failed, as a call you can paste into a test; the original exceptions are chained as an `ExceptionGroup`. Its builds are real: they use up sequence numbers and `fake.unique` values, and `strategy="create"` saves rows, so run it inside a test.
-- A sequence's function gets the counter first, whatever the parameter is called, then other attributes by name, as a callback gets the instance first: `f.slug = sequence(lambda n, title: f"{slugify(title)}-{n}")`.
-- Passing `<name>_id=` instead of `<name>=` skips the `<name>` association, and the `_id` still reaches the model: `create("book", author_id=a.id)` no longer makes a spare author (which under SQLAlchemy silently replaced the id you passed). Only for an attribute declared as `association(...)`; passing both passes both. If a test relied on the spare row, pass `<name>=` too. An attribute or callback that depends on `<name>` then raises, saying `<name>_id=` replaced it.
-<!-- /lane -->
+### What you must do
+
+- Rewrite factory and trait bodies without the `f` parameter: `from factory_bot import f`, `def user():`, and `@trait` instead of `@f.trait`. Applies if you wrote factories for 0.0.1. An old-style body raises an error showing the new form.
+- Write `lambda: SomeClass()` where you want a new instance per build. Applies if you assigned a class as a value: a class is now stored, not called, so `f.status = Status` gives the `Enum` class.
+- Drop the parentheses from `fake` calls in bodies (`f.name = fake.first_name`), or wrap a call that needs arguments in a lambda. Applies if a body calls `fake.x()`: that gave every build the same value, and is now an error.
+- Replace `build(...)` or `attributes_for(...)` called directly in a body with `association(...)`, or wrap it in a lambda. Applies if a body calls one: it ran once, at import, so every build shared one object. It's now an error.
+- Rename or remove one of the two. Applies if a factory defines two traits with the same name: the second used to replace the first silently, and is now an error.
+- Read the value back from the built object. Applies if you pass a list, dict, set or tuple as an override and rely on the model holding that same object: overrides are now copied, like declared values.
+- Remove a `seed()` call made once for the whole run, or disable the plugin with `-p no:factory_bot`. Applies if you seed `fake` in a conftest: the new pytest plugin reseeds before every test.
+- Install Django or SQLAlchemy yourself. Applies if you installed `factory_bot[django]` or `factory_bot[sqlalchemy]`: the extras are gone, since factory_bot never imports either.
+
+### Added
+
+- `create` builds, then saves: `obj.save()` by default. `persist_with(fn)` saves with a function instead, and `persist_with(session)` adds and flushes to a SQLAlchemy `Session` or `scoped_session`, never committing, so the test's transaction still decides. `persist_with(None)` restores `obj.save()`.
+- `build_list` and `create_list`.
+- `association(factory, *traits, **overrides)` makes another factory's object with the parent's strategy: built for `build`, created first for `create`. Called during a build, from a lambda or a callback, it makes the object right away, for associations that depend on other attributes or come in lists. `attributes_for` leaves associations out unless you pass them.
+- Passing `<name>_id=` skips association `<name>` and still reaches the model, so `create("book", author_id=a.id)` makes no spare author. It applies only to an attribute declared as `association(...)`.
+- `transient(value)` declares an input other attributes and callbacks can use, which never reaches the model or `attributes_for`.
+- Child factories: a bare `@factory` nested in a factory inherits its model, attributes, traits, sequences and callbacks; nest `@factory(Model)` to switch model.
+- `@after_build` and `@after_create` callbacks get the object first, then other attributes by name, transients included. They run parent first, then child, then traits.
+- `@factory(User)` returns a `Factory[User]`. Pass it wherever a name goes, as in `build(user)` or `association(user)`, and a type checker knows the result is a `User`. Names still work and give `Any`.
+- A sequence's function gets the counter first, then other attributes by name: `sequence(lambda n, title: f"{slugify(title)}-{n}")`.
+- `lint()` builds every factory once, then once with each trait, and raises one error listing every call that failed, ready to paste into a test.
+- A pytest plugin, on by default. Before each test it reseeds `fake` from the test's id, so a test's fake data is the same alone, in the suite or in any order; with pytest-randomly, `--randomly-seed` drives it, and the seed is in the report header. After each test it undoes a `persist_with` the test or its function-scoped fixtures set. `factory_bot_reset_sequences = true` restarts sequences per test. Disable it with `-p no:factory_bot`.
+
+### Changed
+
+- Every list, dict, set and tuple, nested ones included, is copied per build, so `f.settings = {"roles": []}` no longer leaks between tests.
+- A `sequence`, `association` or `transient` passed as an override is evaluated, not passed to the model as a raw object.
+- A marker inside a container, or returned from a lambda, is an error naming the attribute, instead of reaching the model unevaluated.
+- `seed()` also clears `fake.unique`, so the same seed gives the same data whatever ran before.
+- A lazy attribute's positional-only parameters are injected like the others.
+- Errors say where they happened. A `FactoryError` names the factory, the innermost when builds nest. An exception from a model, lambda or callback keeps its type and gains notes naming the factory and attribute with its file:line. A model's unknown-keyword `TypeError` suggests the attribute you probably meant.
+- "Factory 'user' is already defined" shows the first definition's full path and suggests `clear_factories()` for a REPL or a reload.
+- Reading `f.x` raises an `AttributeError` too, so `hasattr(f, ...)`, `inspect.unwrap` and doctest work.
+- A one-parameter function, `def make_point(x)`, can be a model; only a lone parameter named `f` is read as an old-style body.
 
 ## 0.0.1 - 2026-10-18
 
