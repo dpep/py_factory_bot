@@ -6,6 +6,7 @@ import re
 import weakref
 from collections.abc import Callable
 from contextvars import ContextVar
+from dataclasses import dataclass
 from typing import Any
 
 _registry: dict[str, "_Definition"] = {}
@@ -145,8 +146,56 @@ class _Definition:
                 )
         return [traits[name] for name in dict.fromkeys(names)]  # each applies once
 
+    def resolve(self, trait_names, overrides):
+        """The lineage, then the named traits, then the overrides: later layers win."""
+        lineage = self.lineage()
+        layers = [*lineage, *self._find_traits(trait_names)]
+        # A marker in an override evaluates like a definition; anything else is a plain value.
+        given = {
+            n: v if isinstance(v, _Marker) else _Given(v) for n, v in overrides.items()
+        }
+        values = [*(layer.attributes for layer in layers), given]
+        return _Plan(
+            factory=self.name,
+            definitions={n: v for layer in values for n, v in layer.items()},
+            transients={
+                n
+                for layer in values
+                for n, v in layer.items()
+                if isinstance(v, _Transient)
+            },
+            declared={n for layer in layers for n in layer.attributes},
+            model=next(d.model for d in reversed(lineage) if d.model),
+            to_create=next(
+                (d.to_create for d in reversed(lineage) if d.to_create), None
+            ),
+            callbacks={
+                kind: [cb for layer in layers for cb in layer.callbacks[kind]]
+                for kind in self.callbacks
+            },
+        )
+
     def tree(self):
         return [self, *(d for child in self.children for d in child.tree())]
+
+
+@dataclass
+class _Plan:
+    """One build's declarations, every layer applied: which value wins for each name, and its kind."""
+
+    factory: str
+    definitions: dict[
+        str, Any
+    ]  # declaration order; overrides wrapped in _Given unless a marker
+    transients: set[
+        str
+    ]  # transient in any layer stays transient, whatever a later layer assigns
+    declared: set[str]  # what the factory and its traits declare, overrides aside
+    model: Callable[..., Any]
+    to_create: (
+        Callable[[Any], Any] | None
+    )  # the nearest factory's hook; None defers to the global one
+    callbacks: dict[str, list[Callable[..., Any]]]  # by kind, in layer order
 
 
 def _register(definition):
