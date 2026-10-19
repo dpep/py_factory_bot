@@ -2,8 +2,11 @@
 
 # Duck-typed on purpose: importing this module never imports SQLAlchemy.
 
+from collections.abc import Callable
+from typing import Any
 
-def persist_with(session):
+
+def persist_with(session: Any) -> Callable[[object], None]:
     """A to_create hook that adds each object to `session` and flushes, leaving commit or rollback to the caller."""
     if not (hasattr(session, "add") and hasattr(session, "flush")):
         raise TypeError(
@@ -11,7 +14,7 @@ def persist_with(session):
             " Pass the test's session, e.g. persist_with(session)."
         )
 
-    def persist(obj):
+    def persist(obj: object) -> None:
         session.add(obj)
         session.flush()
 

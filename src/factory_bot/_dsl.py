@@ -36,7 +36,7 @@ def factory(model: Callable[..., Any], /) -> Callable[[Body], Body]:
                 f"@factory needs a model: write @factory(User) or @factory(dict) above def {model.__name__}"
             )
         # Typed for @factory(Model); the bare nested form's return value is never used.
-        return _define(model, None)  # type: ignore[return-value]
+        return _define(model, None)
     return lambda body: _define(body, model)
 
 

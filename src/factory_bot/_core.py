@@ -55,7 +55,8 @@ def _set_to_create(fn):
     return fn
 
 
-def sequence(fn: Callable[[int], Any]) -> "_Sequence":
+# Markers are typed `object`: opaque, good only for handing back to factory_bot.
+def sequence(fn: Callable[[int], Any]) -> object:
     """A value built from a counter that starts at 1, e.g. sequence(lambda n: f"user{n}")."""
     try:
         inspect.signature(fn).bind(1)
@@ -68,7 +69,7 @@ def sequence(fn: Callable[[int], Any]) -> "_Sequence":
     return _Sequence(fn)
 
 
-def association(name: str, /, *traits: str, **overrides: Any) -> "_Association":
+def association(name: str, /, *traits: str, **overrides: Any) -> Any:
     """Another factory's object, built or created along with this one.
 
     Called while a build is running (from a lazy attribute or callback), it builds now.
@@ -79,7 +80,7 @@ def association(name: str, /, *traits: str, **overrides: Any) -> "_Association":
     return marker
 
 
-def transient(value: object) -> "_Transient":
+def transient(value: object) -> object:
     """An attribute other attributes can depend on that never reaches the model."""
     return _Transient(value)
 

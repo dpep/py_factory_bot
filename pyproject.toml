@@ -40,6 +40,7 @@ dev = [
   "pytest-randomly",
   "coverage[toml]",
   "ruff",
+  "pyright[nodejs]",  # the nodejs extra ships node as a wheel, so no system node is needed
   "django",
   "sqlalchemy >= 2",
 ]
@@ -71,3 +72,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 extend-select = ["I", "UP", "B"]
+
+[tool.pyright]
+include = ["src", "tests/test_typing.py"]
+reportUnnecessaryTypeIgnoreComment = true
