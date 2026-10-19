@@ -21,6 +21,12 @@ def _defining() -> bool:
     return bool(_stack.get())
 
 
+def _defining_name() -> str | None:
+    """The innermost factory whose body is executing right now, if any."""
+    stack = _stack.get()
+    return _factory_name(stack) if stack else None
+
+
 def factory(model: Callable[..., Any], /) -> Callable[[Body], Body]:
     """@factory(User) registers a factory; nested in one, bare @factory declares a child."""
     if _is_body(model):

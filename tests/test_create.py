@@ -99,7 +99,7 @@ def test_create_while_a_factory_is_being_defined_is_an_error():
         pass
 
     message = (
-        r"^create\('user'\) ran while a factory was being defined, so it would run once, at import\."
+        r"^Factory 'post': create\('user'\) ran while a factory was being defined, so it would run once, at import\."
         r" Make it lazy: lambda: create\('user'\), or use association\('user'\)$"
     )
     with pytest.raises(FactoryError, match=message):
@@ -108,7 +108,9 @@ def test_create_while_a_factory_is_being_defined_is_an_error():
         def post():
             f.author = create("user")
 
-    with pytest.raises(FactoryError, match=r"^build\('user'\) ran while"):
+    with pytest.raises(
+        FactoryError, match=r"^Factory 'draft': build\('user'\) ran while"
+    ):
 
         @factory(Post)
         def draft():
