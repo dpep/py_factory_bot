@@ -3,7 +3,7 @@ import threading
 
 import pytest
 
-from factory_bot import FactoryError, build, f, factory, trait
+from factory_bot import FactoryError, _dsl, build, f, factory, trait
 
 
 def test_f_outside_a_body_says_where_it_works():
@@ -158,6 +158,17 @@ def test_a_body_that_is_not_a_function_is_rejected():
         @factory(dict)
         def user():
             trait(body)
+
+
+def test_defining_is_true_only_while_a_body_runs():
+    seen = []
+
+    @factory(dict)
+    def user():
+        seen.append(_dsl._defining())
+
+    assert seen == [True]
+    assert not _dsl._defining()
 
 
 def test_threads_defining_factories_at_once_do_not_cross_talk():

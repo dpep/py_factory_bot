@@ -16,6 +16,11 @@ _stack: ContextVar[tuple[_Definition, ...]] = ContextVar(
 )
 
 
+def _defining() -> bool:
+    """Whether a factory or trait body is executing right now, in this context."""
+    return bool(_stack.get())
+
+
 def factory(model: Callable[..., Any], /) -> Callable[[Body], Body]:
     """@factory(User) registers a factory; nested in one, bare @factory declares a child."""
     if _is_body(model):
