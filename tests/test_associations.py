@@ -7,22 +7,24 @@ from factory_bot import (
     attributes_for,
     build,
     create,
+    f,
     factory,
+    trait,
 )
 
 
 @pytest.fixture
 def post_factory():
     @factory(User)
-    def user(f):
+    def user():
         f.first_name = "Ann"
 
-        @f.trait
-        def admin(f):
+        @trait
+        def admin():
             f.admin = True
 
     @factory(Post)
-    def post(f):
+    def post():
         f.title = "Hello"
         f.author = association("user", "admin", last_name="Lee")
 
@@ -49,11 +51,11 @@ def test_attributes_for_leaves_associations_out(post_factory):
 
 def test_an_association_to_an_unknown_factory_names_the_attribute():
     @factory(Post)
-    def post(f):
+    def post():
         f.author = association("usr")
 
     @factory(User)
-    def user(f):
+    def user():
         pass
 
     message = r"^Factory 'post': 'author' is an association to 'usr', which is not a factory\. Did you mean 'user'\?$"
@@ -63,11 +65,11 @@ def test_an_association_to_an_unknown_factory_names_the_attribute():
 
 def test_attributes_for_still_builds_an_association_another_attribute_needs():
     @factory(User)
-    def user(f):
+    def user():
         f.first_name = "Ann"
 
     @factory(dict)
-    def post(f):
+    def post():
         f.author = association("user")
         f.byline = lambda author: f"by {author.first_name}"
 

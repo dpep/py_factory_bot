@@ -9,12 +9,12 @@ from ._core import (
     create,
     create_list,
     create_pair,
-    factory,
     reset_sequences,
     sequence,
     to_create,
     transient,
 )
+from ._dsl import f, factory, trait
 from ._fake import fake, seed
 
 __author__ = "dpepper"
@@ -31,11 +31,13 @@ __all__ = [
     "create",
     "create_list",
     "create_pair",
+    "f",
     "factory",
     "fake",
     "reset_sequences",
     "seed",
     "sequence",
     "to_create",
+    "trait",
     "transient",
 ]

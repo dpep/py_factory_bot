@@ -1,12 +1,12 @@
 import pytest
 from support.models import User
 
-from factory_bot import FactoryError, build, factory
+from factory_bot import FactoryError, build, f, factory
 
 
 def test_builds_the_model_from_static_attributes():
     @factory(User)
-    def user(f):
+    def user():
         f.first_name = "John"
         f.last_name = "Doe"
 
@@ -15,7 +15,7 @@ def test_builds_the_model_from_static_attributes():
 
 def test_any_callable_taking_kwargs_is_a_model():
     @factory(dict)
-    def point(f):
+    def point():
         f.x = 1
         f.y = 2
 
@@ -27,7 +27,7 @@ def test_a_plain_function_is_a_model_too():
         return kwargs
 
     @factory(make_point)
-    def point(f):
+    def point():
         f.x = 1
 
     assert build("point") == {"x": 1}
@@ -35,7 +35,7 @@ def test_a_plain_function_is_a_model_too():
 
 def test_overrides_win_and_may_add_attributes():
     @factory(dict)
-    def point(f):
+    def point():
         f.x = 1
 
     assert build("point", x=5, z=3) == {"x": 5, "z": 3}
@@ -43,7 +43,7 @@ def test_overrides_win_and_may_add_attributes():
 
 def test_an_attribute_called_name_can_be_overridden():
     @factory(dict)
-    def person(f):
+    def person():
         f.name = "Ann"
 
     assert build("person", name="Bea") == {"name": "Bea"}
@@ -51,7 +51,7 @@ def test_an_attribute_called_name_can_be_overridden():
 
 def test_mutable_values_are_not_shared_between_builds():
     @factory(User)
-    def user(f):
+    def user():
         f.tags = []
 
     first, second = build("user"), build("user")
@@ -61,7 +61,7 @@ def test_mutable_values_are_not_shared_between_builds():
 
 def test_unknown_factory_suggests_the_closest_name():
     @factory(User)
-    def user(f):
+    def user():
         pass
 
     with pytest.raises(
@@ -76,7 +76,7 @@ def test_bare_decorator_names_the_fix():
     ):
 
         @factory
-        def user(f):
+        def user():
             pass
 
 
@@ -86,13 +86,13 @@ def test_model_must_be_callable():
     ):
 
         @factory("User")
-        def user(f):
+        def user():
             pass
 
 
 def test_duplicate_factory_names_are_rejected():
     @factory(User)
-    def user(f):
+    def user():
         pass
 
     with pytest.raises(
@@ -101,5 +101,5 @@ def test_duplicate_factory_names_are_rejected():
     ):
 
         @factory(User)
-        def user(f):
+        def user():
             pass

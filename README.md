@@ -11,17 +11,17 @@ Early development: the API is still settling.
 
 ### Usage
 ```python
-from factory_bot import build, factory, fake, sequence
+from factory_bot import build, f, factory, fake, sequence, trait
 
 @factory(User)
-def user(f):
+def user():
     f.first_name = fake.first_name                    # callables run per build
     f.email = lambda first_name: f"{first_name}@example.com".lower()  # dependencies by name
     f.username = sequence(lambda n: f"user{n}")
     f.admin = False
 
-    @f.trait
-    def admin(f):
+    @trait
+    def admin():
         f.admin = True
 
 build("user")

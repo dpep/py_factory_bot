@@ -3,14 +3,14 @@ import re
 
 import pytest
 
-from factory_bot import FactoryError, build, factory
+from factory_bot import FactoryError, build, f, factory
 
 
 def test_callables_are_called_on_every_build():
     counter = itertools.count(1)
 
     @factory(dict)
-    def ticket(f):
+    def ticket():
         f.number = lambda: next(counter)
 
     assert [build("ticket")["number"] for _ in range(3)] == [1, 2, 3]
@@ -18,7 +18,7 @@ def test_callables_are_called_on_every_build():
 
 def test_required_parameters_are_injected_by_name():
     @factory(dict)
-    def user(f):
+    def user():
         f.email = lambda first_name, last_name: f"{first_name}.{last_name}@example.com"
         f.first_name = "Ann"
         f.last_name = "Lee"
@@ -28,7 +28,7 @@ def test_required_parameters_are_injected_by_name():
 
 def test_dependencies_see_overrides():
     @factory(dict)
-    def user(f):
+    def user():
         f.first_name = "Ann"
         f.email = lambda first_name: f"{first_name}@example.com"
 
@@ -37,7 +37,7 @@ def test_dependencies_see_overrides():
 
 def test_parameters_with_defaults_are_left_alone():
     @factory(dict)
-    def post(f):
+    def post():
         f.domain = "wrong.example"
         f.body = lambda nb_sentences=3, domain=None: (nb_sentences, domain)
 
@@ -46,7 +46,7 @@ def test_parameters_with_defaults_are_left_alone():
 
 def test_a_callable_without_an_inspectable_signature_has_no_dependencies():
     @factory(dict)
-    def user(f):
+    def user():
         f.meta = dict
 
     first, second = build("user"), build("user")
@@ -56,7 +56,7 @@ def test_a_callable_without_an_inspectable_signature_has_no_dependencies():
 
 def test_overrides_are_never_called():
     @factory(dict)
-    def job(f):
+    def job():
         f.run = lambda: "default"
 
     def callback():
@@ -67,7 +67,7 @@ def test_overrides_are_never_called():
 
 def test_an_undefined_dependency_names_the_attribute_and_suggests_a_fix():
     @factory(dict)
-    def broken(f):
+    def broken():
         f.first_name = "x"
         f.email = lambda frist_name: frist_name
 
@@ -83,7 +83,7 @@ def test_an_undefined_dependency_names_the_attribute_and_suggests_a_fix():
 
 def test_a_circular_dependency_shows_the_cycle():
     @factory(dict)
-    def cyclic(f):
+    def cyclic():
         f.a = lambda b: b
         f.b = lambda c: c
         f.c = lambda a: a
@@ -101,6 +101,6 @@ def test_reading_an_attribute_in_a_definition_points_to_injection():
     ):
 
         @factory(dict)
-        def user(f):
+        def user():
             f.first_name = "Ann"
             f.email = f.first_name + "@example.com"

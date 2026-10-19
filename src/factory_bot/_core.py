@@ -5,34 +5,13 @@ import itertools
 import os
 import weakref
 
-_registry: dict[str, "_Factory"] = {}
+_registry: dict[str, "_Definition"] = {}
 _sequences: weakref.WeakSet["_Sequence"] = weakref.WeakSet()
 _to_create = None
 
 
 class FactoryError(Exception):
     pass
-
-
-def factory(model):
-    """Register the decorated function as a factory for `model`, e.g. @factory(User)."""
-    if _is_body(model):
-        raise FactoryError(
-            f"@factory needs a model: write @factory(User) or @factory(dict) above def {model.__name__}"
-        )
-
-    def register(body):
-        name = body.__name__
-        if not callable(model):
-            raise FactoryError(f"Factory {name!r}: model {model!r} is not callable")
-        if name in _registry:
-            raise FactoryError(
-                f"Factory {name!r} is already defined{_where(_registry[name].body)}"
-            )
-        _registry[name] = _Factory(name, model, body)
-        return body
-
-    return register
 
 
 def build(name, /, *traits, **overrides):
@@ -102,12 +81,13 @@ def reset_sequences():
         seq.reset()
 
 
-class _Factory:
-    def __init__(self, name, model, body):
-        self.name, self.model, self.body = name, model, body
+class _Definition:
+    """A factory or a trait: what its body declared, recorded once at definition time."""
+
+    def __init__(self, name, model, body, kind="factory"):
+        self.name, self.model, self.body, self.kind = name, model, body, kind
         self.attributes = {}
-        self.traits = {}
-        body(_Definition(self, self.attributes))
+        self.traits: dict[str, _Definition] = {}
 
     def definitions(self, traits):
         definitions = dict(self.attributes)
@@ -117,8 +97,17 @@ class _Factory:
                     f"Factory {self.name!r} has no trait {trait!r}.{_suggest(trait, self.traits)}"
                     f" Traits: {', '.join(self.traits) or '(none)'}"
                 )
-            definitions |= self.traits[trait]
+            definitions |= self.traits[trait].attributes
         return definitions
+
+
+def _register(definition):
+    name = definition.name
+    if name in _registry:
+        raise FactoryError(
+            f"Factory {name!r} is already defined{_where(_registry[name].body)}"
+        )
+    _registry[name] = definition
 
 
 class _Sequence:
@@ -142,30 +131,6 @@ class _Association:
 class _Transient:
     def __init__(self, value):
         self.value = value
-
-
-class _Definition:
-    """The `f` in `def user(f):`. Assigning to it declares an attribute."""
-
-    def __init__(self, factory, attributes):
-        object.__setattr__(self, "_factory", factory)
-        object.__setattr__(self, "_attributes", attributes)
-
-    def __setattr__(self, name, value):
-        self._attributes[name] = value
-
-    def trait(self, body):
-        # Run the body now, once: re-running it per build would restart its sequences.
-        attributes = {}
-        body(_Definition(self._factory, attributes))
-        self._factory.traits[body.__name__] = attributes
-        return body
-
-    def __getattr__(self, name):
-        raise FactoryError(
-            f"Factory {self._factory.name!r}: can't read f.{name} in a definition."
-            f" To use another attribute, take it as a parameter: lambda {name}: ..."
-        )
 
 
 class _Evaluator:
@@ -278,18 +243,6 @@ def _lookup(name):
     if name not in _registry:
         raise FactoryError(f"No factory named {name!r}.{_suggest(name, _registry)}")
     return _registry[name]
-
-
-def _is_body(model):
-    # Bare @factory hands us the body itself: a function of exactly one required argument.
-    if not inspect.isfunction(model):
-        return False
-    params = list(inspect.signature(model).parameters.values())
-    return (
-        len(params) == 1
-        and params[0].kind is params[0].POSITIONAL_OR_KEYWORD
-        and params[0].default is params[0].empty
-    )
 
 
 def _suggest(name, options):

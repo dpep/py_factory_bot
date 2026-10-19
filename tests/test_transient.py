@@ -5,6 +5,7 @@ from factory_bot import (
     FactoryError,
     attributes_for,
     build,
+    f,
     factory,
     sequence,
     transient,
@@ -14,7 +15,7 @@ from factory_bot import (
 @pytest.fixture
 def user_factory():
     @factory(User)
-    def user(f):
+    def user():
         f.shout = transient(False)
         f.suffix = transient(lambda: "!")
         f.first_name = lambda shout, suffix: ("ANN" if shout else "Ann") + suffix
@@ -34,7 +35,7 @@ def test_attributes_for_leaves_transients_out(user_factory):
 
 def test_a_transient_wraps_any_value_including_markers():
     @factory(dict)
-    def user(f):
+    def user():
         f.n = transient(sequence(lambda n: n))
         f.label = lambda n: f"#{n}"
 
@@ -43,7 +44,7 @@ def test_a_transient_wraps_any_value_including_markers():
 
 def test_an_undefined_dependency_of_a_transient_still_points_at_its_line():
     @factory(dict)
-    def user(f):
+    def user():
         f.name = "Ann"
         f.greeting = transient(lambda nmae: nmae)
         f.card = lambda greeting: greeting

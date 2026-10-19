@@ -1,11 +1,11 @@
 from faker import Faker
 
-from factory_bot import build, factory, fake, seed
+from factory_bot import build, f, factory, fake, seed
 
 
 def test_fake_is_a_shared_faker_whose_methods_are_lazy_values():
     @factory(dict)
-    def user(f):
+    def user():
         f.first_name = fake.first_name
         f.bio = fake.paragraph  # its parameters all have defaults, so none are injected
 
@@ -16,7 +16,7 @@ def test_fake_is_a_shared_faker_whose_methods_are_lazy_values():
 
 def test_seed_makes_fake_values_reproducible():
     @factory(dict)
-    def user(f):
+    def user():
         f.first_name = fake.first_name
 
     seed(1234)

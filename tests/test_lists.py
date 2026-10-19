@@ -6,19 +6,21 @@ from factory_bot import (
     build_pair,
     create_list,
     create_pair,
+    f,
     factory,
     sequence,
+    trait,
 )
 
 
 @pytest.fixture
 def user_factory():
     @factory(User)
-    def user(f):
+    def user():
         f.username = sequence(lambda n: f"user{n}")
 
-        @f.trait
-        def admin(f):
+        @trait
+        def admin():
             f.admin = True
 
 

@@ -3,24 +3,24 @@ import re
 import pytest
 from support.models import User
 
-from factory_bot import FactoryError, build, factory, sequence
+from factory_bot import FactoryError, build, f, factory, sequence, trait
 
 
 @pytest.fixture
 def user_factory():
     @factory(User)
-    def user(f):
+    def user():
         f.first_name = "John"
         f.email = lambda first_name: f"{first_name}@example.com".lower()
         f.admin = False
 
-        @f.trait
-        def admin(f):
+        @trait
+        def admin():
             f.admin = True
             f.first_name = "Root"
 
-        @f.trait
-        def anonymous(f):
+        @trait
+        def anonymous():
             f.first_name = "Anon"
             f.email = None
 
@@ -42,11 +42,11 @@ def test_overrides_win_over_traits(user_factory):
 
 def test_a_trait_body_runs_once_so_its_sequence_keeps_counting():
     @factory(dict)
-    def user(f):
+    def user():
         f.username = sequence(lambda n: f"user{n}")
 
-        @f.trait
-        def admin(f):
+        @trait
+        def admin():
             f.username = sequence(lambda n: f"admin{n}")
 
     assert [build("user", "admin")["username"] for _ in range(3)] == [
@@ -64,7 +64,7 @@ def test_an_unknown_trait_suggests_the_closest_and_lists_them_all(user_factory):
 
 def test_a_factory_without_traits_says_so():
     @factory(User)
-    def user(f):
+    def user():
         pass
 
     with pytest.raises(
