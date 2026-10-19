@@ -27,7 +27,15 @@ def _defining_factory() -> str | None:
 
 
 class FactoryError(Exception):
-    pass
+    """factory_bot's error. `factory` names the factory it happened in, and prefixes the message."""
+
+    def __init__(self, message: str = "", *, factory: str | None = None):
+        super().__init__(message)
+        self.factory = factory
+
+    def __str__(self) -> str:
+        message = super().__str__()
+        return f"Factory {self.factory!r}: {message}" if self.factory else message
 
 
 def build(name: str, /, *traits: str, **overrides: Any) -> Any:
@@ -229,7 +237,7 @@ class _Evaluator:
         if name in self.resolving:
             cycle = " -> ".join([*self.resolving[self.resolving.index(name) :], name])
             raise FactoryError(
-                f"Factory {self.factory_name!r}: circular dependency: {cycle}"
+                f"circular dependency: {cycle}", factory=self.factory_name
             )
         self.resolving.append(name)
         try:
@@ -267,8 +275,9 @@ class _Evaluator:
         for dep in [*positional, *keyword]:
             if dep not in self.definitions:
                 raise FactoryError(
-                    f"Factory {self.factory_name!r}: {name!r} depends on {dep!r}, which is not defined."
-                    f"{_suggest(dep, self.definitions)}{_where(fn)}"
+                    f"{name!r} depends on {dep!r}, which is not defined."
+                    f"{_suggest(dep, self.definitions)}{_where(fn)}",
+                    factory=self.factory_name,
                 )
         args = [self.get(dep) for dep in positional]
         return fn(*leading, *args, **{dep: self.get(dep) for dep in keyword})
@@ -278,8 +287,9 @@ class _Evaluator:
         if assoc.name not in _registry:
             what = f"{name!r} is an association" if name else "an association"
             raise FactoryError(
-                f"Factory {self.factory_name!r}: {what} to {assoc.name!r},"
-                f" which is not a factory.{_suggest(assoc.name, _registry)}"
+                f"{what} to {assoc.name!r}, which is not a factory."
+                f"{_suggest(assoc.name, _registry)}",
+                factory=self.factory_name,
             )
         # attributes_for omits associations, but a dependent attribute may still need the object.
         strategy = "create" if self.strategy == "create" else "build"
@@ -295,7 +305,8 @@ class _Evaluator:
             if outer.via and outer.via[1] == key:
                 chain = [e.via[0] for e in building[i:] if e.via]
                 raise FactoryError(
-                    f"Factory {self.factory_name!r}: circular association: {' -> '.join([*chain, label])}"
+                    f"circular association: {' -> '.join([*chain, label])}",
+                    factory=self.factory_name,
                 )
         return _run(strategy, assoc.name, assoc.traits, assoc.overrides, (label, key))
 
@@ -303,8 +314,9 @@ class _Evaluator:
 def _run(strategy, name, traits, overrides, via=None):
     if (defining := _defining_factory()) is not None:
         raise FactoryError(
-            f"Factory {defining!r}: {strategy}({name!r}) ran while a factory was being defined, so it would run once, at import."
-            f" Make it lazy: lambda: {strategy}({name!r}), or use association({name!r})"
+            f"{strategy}({name!r}) ran while a factory was being defined, so it would run once, at import."
+            f" Make it lazy: lambda: {strategy}({name!r}), or use association({name!r})",
+            factory=defining,
         )
     fac = _lookup(name)
     layers = fac.layers(traits)
@@ -379,8 +391,9 @@ def _persist(fac, obj):
         return
     if not hasattr(obj, "save"):
         raise FactoryError(
-            f"Factory {fac.name!r}: can't create a {type(obj).__name__}: it has no save()."
-            " Give it a save() method, or set a hook with to_create(fn), at top level or inside the factory."
+            f"can't create a {type(obj).__name__}: it has no save()."
+            " Give it a save() method, or set a hook with to_create(fn), at top level or inside the factory.",
+            factory=fac.name,
         )
     obj.save()
 

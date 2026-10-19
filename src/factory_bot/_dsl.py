@@ -35,7 +35,7 @@ def _define(body, model):
     _check_body(body, "factory")
     name = body.__name__
     if model is not None and not callable(model):
-        raise FactoryError(f"Factory {name!r}: model {model!r} is not callable")
+        raise FactoryError(f"model {model!r} is not callable", factory=name)
     parent = _current(f"@factory def {name}") if _stack.get() else None
     definition = _Definition(name, model, body, parent=parent)
     _run_body(
@@ -54,7 +54,8 @@ def trait(body: Body) -> Body:
     owner = _current(f"@trait def {body.__name__}")
     if existing := owner.traits.get(body.__name__):
         raise FactoryError(
-            f"Factory {owner.name!r}: trait {body.__name__!r} is already defined{_where(existing.body)}"
+            f"trait {body.__name__!r} is already defined{_where(existing.body)}",
+            factory=owner.name,
         )
     definition = _Definition(body.__name__, None, body, kind="trait")
     _run_body(definition, body)
@@ -94,11 +95,10 @@ class _F:
     if not TYPE_CHECKING:  # reads stay a type error rather than Any
 
         def __getattr__(self, name):
-            defining = _defining_factory()
-            owner = f"Factory {defining!r}: " if defining else ""
             raise _ReadError(
-                f"{owner}can't read f.{name} in a definition."
-                f" To use another attribute, take it as a parameter: lambda {name}: ..."
+                f"can't read f.{name} in a definition."
+                f" To use another attribute, take it as a parameter: lambda {name}: ...",
+                factory=_defining_factory(),
             )
 
     def __repr__(self) -> str:
@@ -150,8 +150,9 @@ def _current(what, kinds=("factory",)):
         raise FactoryError(f"{what} only works inside a @factory body")
     if stack[-1].kind not in kinds:
         raise FactoryError(
-            f"Factory {_defining_factory()!r}: {what} must be directly inside the factory,"
-            f" not inside {stack[-1].kind} {stack[-1].name!r}"
+            f"{what} must be directly inside the factory,"
+            f" not inside {stack[-1].kind} {stack[-1].name!r}",
+            factory=_defining_factory(),
         )
     return stack[-1]
 
@@ -178,8 +179,9 @@ def _callback(kind: str) -> Callable[[Fn], Fn]:
             factory_name = _defining_factory()
             shown = f"{what}{inspect.signature(fn)}" if name and callable(fn) else what
             raise FactoryError(
-                f"Factory {factory_name!r}: {shown} must take the instance first,"
-                f" then other attributes by name: def {name or 'callback'}({factory_name}, ...)"
+                f"{shown} must take the instance first,"
+                f" then other attributes by name: def {name or 'callback'}({factory_name}, ...)",
+                factory=factory_name,
             )
         owner.callbacks[kind].append(fn)
         return fn
