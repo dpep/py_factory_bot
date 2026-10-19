@@ -142,6 +142,18 @@ def test_a_callback_that_cannot_take_the_instance_is_rejected(callback, shown):
             after_build(callback)
 
 
+def test_a_partial_that_cannot_take_the_instance_is_rejected_by_its_repr():
+    message = (
+        r"^Factory 'user': @after_build functools\.partial\(<function no_parameters at \w+>\)"
+        r" must take the instance first, then other attributes by name: def callback\(user, \.\.\.\)$"
+    )
+    with pytest.raises(FactoryError, match=message):
+
+        @factory(User)
+        def user():
+            after_build(functools.partial(no_parameters))
+
+
 def test_a_partial_is_accepted_as_a_callback():
     @factory(User)
     def user():

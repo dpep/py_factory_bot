@@ -141,12 +141,32 @@ def test_an_async_generator_body_is_rejected():
             yield
 
 
-def test_a_lambda_body_is_rejected():
+@pytest.mark.parametrize(
+    "define",
+    [lambda body: factory(dict)(body), factory],
+    ids=["with a model", "bare"],
+)
+def test_a_lambda_body_is_rejected(define):
     with pytest.raises(
         FactoryError,
         match=r"^@factory takes a def, not a lambda: the function's name names the factory$",
     ):
-        factory(dict)(lambda: None)
+        define(lambda: None)
+
+
+def test_f_repr_says_which_body_it_declares_on():
+    seen = []
+
+    @factory(dict)
+    def user():
+        seen.append(repr(f))
+
+        @trait
+        def admin():
+            seen.append(repr(f))
+
+    assert seen == ["<f: factory 'user'>", "<f: trait 'admin'>"]
+    assert repr(f) == "<f: outside any factory>"
 
 
 def test_a_body_that_is_not_a_function_is_rejected():
