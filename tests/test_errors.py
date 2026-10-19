@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import pytest
 from support.models import Post, User
 
-from factory_bot import after_build, association, build, create, f, factory
+from factory_bot import after_build, association, build, create, f, factory, transient
 
 
 @dataclass
@@ -141,3 +141,19 @@ def test_an_error_in_a_callback_names_the_factory_and_callback():
         r"while building factory 'user', callback 'explode' \(test_errors\.py:\d+\)",
         notes(excinfo)[0],
     )
+
+
+def test_a_callback_whose_dependency_fails_is_noted_once():
+    @factory(dict)
+    def user():
+        f.n = transient(lambda: 1 / 0)
+
+        @after_build
+        def use(user, n):
+            pass
+
+    with pytest.raises(ZeroDivisionError) as excinfo:
+        build("user")
+    assert [n.split(" (")[0] for n in notes(excinfo)] == [
+        "while building factory 'user', attribute 'n'"
+    ]

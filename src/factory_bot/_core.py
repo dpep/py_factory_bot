@@ -225,10 +225,9 @@ class _Evaluator:
         try:
             self.values[name] = self.evaluate(name, self.definitions[name])
         except Exception as e:
-            if e is not self.noted:  # a dependency's failure is noted where it happened
-                self.note(
-                    e, f", attribute {name!r}{_where(_source(self.definitions[name]))}"
-                )
+            self.note(
+                e, f", attribute {name!r}{_where(_source(self.definitions[name]))}"
+            )
             raise
         finally:
             self.resolving.pop()
@@ -248,7 +247,8 @@ class _Evaluator:
         return _fresh(value)
 
     def note(self, e, detail="", verb="building"):
-        if not isinstance(e, FactoryError):  # ours already name the factory
+        # Ours already name the factory; a dependency's failure is noted where it happened.
+        if not isinstance(e, FactoryError) and e is not self.noted:
             e.add_note(f"while {verb} factory {self.factory_name!r}{detail}")
             self.noted = e
 
