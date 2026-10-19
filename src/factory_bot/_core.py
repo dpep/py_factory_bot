@@ -214,15 +214,21 @@ class _Definition:
                 )
         return [traits[name] for name in dict.fromkeys(names)]  # each applies once
 
-    def resolve(self, trait_names, overrides):
-        """The lineage, then the named traits, then the overrides: later layers win."""
+    def resolve(self, trait_names, overrides, declarations=None):
+        """The lineage, then the named traits, then the declarations, then the overrides: later layers win.
+
+        Declarations are an association's overrides written in a body: evaluated like the
+        factory's own attributes, where overrides are used as given.
+        """
         lineage = self.lineage()
         layers = [*lineage, *self._find_traits(trait_names)]
-        values = [*(layer.attributes for layer in layers), overrides]
+        declarations = declarations or {}
+        values = [*(layer.attributes for layer in layers), declarations, overrides]
         given = {n: _Given(v) for n, v in overrides.items()}
         definitions = {
             n: v for layer in [*values[:-1], given] for n, v in layer.items()
         }
+        passed = {**declarations, **overrides}
         return _Plan(
             factory=self.name,
             definitions=definitions,
@@ -240,10 +246,10 @@ class _Definition:
             },
             replaced={
                 key[:-3]: key
-                for key in overrides
+                for key in passed
                 if key.endswith("_id")
-                and key[:-3] not in overrides
-                and isinstance(definitions.get(key[:-3]), _Association)
+                and key[:-3] not in passed
+                and isinstance(_unwrap(definitions.get(key[:-3])), _Association)
             },
             model=next(d.model for d in reversed(lineage) if d.model),
             callbacks={
@@ -463,11 +469,15 @@ class _Evaluator:
                 raise self.error(
                     f"circular association: {' -> '.join([*chain, label])}"
                 )
-        overrides = {k: v if given else _fresh(v) for k, v in assoc.overrides.items()}
-        return _run(strategy, assoc.name, assoc.traits, overrides, (label, key))
+        overrides, declarations = (
+            (assoc.overrides, None) if given else ({}, assoc.overrides)
+        )
+        return _run(
+            strategy, assoc.name, assoc.traits, overrides, (label, key), declarations
+        )
 
 
-def _run(strategy, factory, traits, overrides, via=None):
+def _run(strategy, factory, traits, overrides, via=None, declarations=None):
     name = _name_of(factory)
     if _defining_factory() is not None:
         raise FactoryError(
@@ -475,7 +485,7 @@ def _run(strategy, factory, traits, overrides, via=None):
             f" Use association({name!r}), which builds or creates to match the parent, or make it lazy: lambda: {strategy}({name!r})"
         )
     # Outside the frame below: an unknown factory or trait is the caller's mistake.
-    plan = _lookup(name).resolve(traits, overrides)
+    plan = _lookup(name).resolve(traits, overrides, declarations)
     evaluator = _Evaluator(strategy, plan, via)
     token = _building.set((*_building.get(), evaluator))
     try:
@@ -695,6 +705,10 @@ def _code_is(fn, *checks):
 
 def _is_async(fn):
     return _code_is(fn, inspect.iscoroutinefunction, inspect.isasyncgenfunction)
+
+
+def _unwrap(value):
+    return value.value if isinstance(value, _Transient) else value
 
 
 def _source(value):

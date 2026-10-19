@@ -292,3 +292,51 @@ def test_an_unknown_association_called_from_a_callback_names_no_attribute():
     message = r"^Factory 'post': an association to 'usr', which is not a factory\. Did you mean 'user'\?$"
     with pytest.raises(FactoryError, match=message):
         build("post")
+
+
+def test_an_id_override_skips_a_transient_association(books):
+    @factory(dict)
+    def signed():
+        f.author = transient(association("author"))
+        f.byline = lambda author: author["name"]
+
+    with pytest.raises(FactoryError, match="isn't made because author_id= was given"):
+        build("signed", author_id=7)
+    assert books == []
+
+
+def test_an_id_written_in_a_body_skips_the_inner_association(books):
+    @factory(dict)
+    def review():
+        f.book = association("book", author_id=7)
+
+    assert build("review") == {"book": {"title": "Dune", "author_id": 7}}
+    assert books == []
+
+
+@pytest.fixture
+def people():
+    @factory(dict)
+    def person():
+        f.first = "Ann"
+        f.name = "Ann Lee"
+
+
+def test_an_association_override_written_in_a_body_is_a_declaration(people):
+    @factory(dict)
+    def team():
+        f.lead = association("person", name=lambda first: first.upper())
+        f.first = "not the child's"
+
+    assert build("team")["lead"] == {"first": "Ann", "name": "ANN"}
+
+
+def test_an_association_override_passed_at_build_time_is_used_as_given(people):
+    @factory(dict)
+    def team():
+        f.lead = association("person")
+        f.member = lambda: association("person", name=str.upper)
+
+    built = build("team", lead=association("person", name=str.upper))
+    assert built["lead"]["name"] is str.upper
+    assert built["member"]["name"] is str.upper

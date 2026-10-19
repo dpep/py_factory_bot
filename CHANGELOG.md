@@ -19,7 +19,12 @@
 - `create` builds, then saves: `obj.save()` by default. `persist_with(fn)` saves with a function instead, and `persist_with(session)` adds and flushes to a SQLAlchemy `Session` or `scoped_session`, never committing, so the test's transaction still decides. `persist_with(None)` restores `obj.save()`.
 - `build_list` and `create_list`.
 - `association(factory, *traits, **overrides)` makes another factory's object with the parent's strategy: built for `build`, created first for `create`. Called during a build, from a lambda or a callback, it makes the object right away, for associations that depend on other attributes or come in lists. `attributes_for` leaves associations out unless you pass them.
-- Passing `<name>_id=` skips association `<name>` and still reaches the model, so `create("book", author_id=a.id)` makes no spare author. It applies only to an attribute declared as `association(...)`.
+<!-- lane: hunt2-core -->
+- An association's overrides written in a body work like the other factory's own attributes: `association(author, name=fake.name)` gives each author a fresh name, and a function's parameters are filled from that factory's attributes. Passed at build time, they are used as given.
+<!-- /lane -->
+<!-- lane: hunt2-core -->
+- Passing `<name>_id=` skips association `<name>` and still reaches the model, so `create("book", author_id=a.id)` makes no spare author. It applies only to an attribute declared as `association(...)` or `transient(association(...))`.
+<!-- /lane -->
 - `transient(value)` declares an input other attributes and callbacks can use, which never reaches the model or `attributes_for`.
 - Child factories: `@factory(parent=user)` defines a child that inherits its parent's model, attributes, traits, sequences and callbacks, typed `Factory[User]`; `@factory(Admin, parent=user)` switches model. A bare `@factory` nested in a factory's body is shorthand for `parent=` that factory.
 - `@after_build` and `@after_create` callbacks get the object first, then other attributes by name, transients included. They run parent first, then child, then traits.
