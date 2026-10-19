@@ -20,7 +20,8 @@ def pytest_addoption(parser):
 
 def pytest_report_header(config):
     source = " (--randomly-seed)" if _randomly_seed(config) is not None else ""
-    return f"factory_bot: seed={_seed(config)}{source}"
+    reset = "on" if config.getini("factory_bot_reset_sequences") else "off"
+    return f"factory_bot: seed={_seed(config)}{source}, reset_sequences={reset}"
 
 
 # tryfirst: before fixtures run, so they share the test's fresh fake.unique.

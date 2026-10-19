@@ -94,8 +94,8 @@ def test_setting_up_a_module_fixture_leaves_the_tests_own_data_alone(scoped):
     assert alone == names(run(scoped))["test_c"]
 
 
-def test_the_seed_is_in_the_header(suite):
-    run(suite).stdout.fnmatch_lines(["factory_bot: seed=0"])
+def test_the_seed_and_sequence_reset_are_in_the_header(suite):
+    run(suite).stdout.fnmatch_lines(["factory_bot: seed=0, reset_sequences=off"])
 
 
 SEQUENCES = """
@@ -121,7 +121,9 @@ def test_sequences_keep_counting_across_tests_by_default(pytester):
 def test_factory_bot_reset_sequences_restarts_them_per_test(pytester):
     pytester.makepyfile(test_seq=SEQUENCES)
     pytester.makeini("[pytest]\nfactory_bot_reset_sequences = true\n")
-    assert names(run(pytester)) == {"test_a": "user1", "test_b": "user1"}
+    result = run(pytester)
+    assert names(result) == {"test_a": "user1", "test_b": "user1"}
+    result.stdout.fnmatch_lines(["factory_bot: seed=0, reset_sequences=on"])
 
 
 def test_p_no_factory_bot_disables_the_plugin(suite):
@@ -263,7 +265,9 @@ def test_pytest_randomly_seed_drives_the_data_too(suite):
 
     def randomly(seed, *args):
         result = suite.runpytest("-s", f"--randomly-seed={seed}", *args)
-        result.stdout.fnmatch_lines([f"factory_bot: seed={seed} (--randomly-seed)"])
+        result.stdout.fnmatch_lines(
+            [f"factory_bot: seed={seed} (--randomly-seed), reset_sequences=off"]
+        )
         return names(result)
 
     assert randomly(1) == randomly(1)

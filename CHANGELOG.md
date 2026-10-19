@@ -26,7 +26,7 @@
 - A sequence's function gets the counter first, then other attributes by name: `sequence(lambda n, title: f"{slugify(title)}-{n}")`.
 - `lint()` builds every factory once, then once with each trait, and raises one error listing every call that failed, ready to paste into a test.
 <!-- lane: sus2-plugin -->
-- A pytest plugin, on by default. It reseeds `fake` before each test from the test's id, and for each fixture from its name and the test, module or session it belongs to, so every test and fixture gets the same fake data alone, in the suite, in any order or under pytest-xdist; with pytest-randomly, `--randomly-seed` drives it, and the seed is in the report header. A `persist_with` set by a test or a fixture of any scope is undone when that test or fixture ends. `factory_bot_reset_sequences = true` restarts sequences per test. Disable it with `-p no:factory_bot`.
+- A pytest plugin, on by default. It reseeds `fake` before each test from the test's id, and for each fixture from its name and the test, module or session it belongs to, so every test and fixture gets the same fake data alone, in the suite, in any order or under pytest-xdist; with pytest-randomly, `--randomly-seed` drives it. A `persist_with` set by a test or a fixture of any scope is undone when that test or fixture ends. `factory_bot_reset_sequences = true` restarts sequences per test. The report header shows the seed and whether sequences reset: `factory_bot: seed=0, reset_sequences=off`. Disable it with `-p no:factory_bot`.
 <!-- /lane -->
 
 ### Changed
