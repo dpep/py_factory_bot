@@ -4,6 +4,8 @@ import inspect
 import itertools
 import os
 import weakref
+from collections.abc import Callable
+from typing import Any
 
 _registry: dict[str, "_Definition"] = {}
 _sequences: weakref.WeakSet["_Sequence"] = weakref.WeakSet()
@@ -14,31 +16,31 @@ class FactoryError(Exception):
     pass
 
 
-def build(name, /, *traits, **overrides):
+def build(name: str, /, *traits: str, **overrides: Any) -> Any:
     return _run("build", name, traits, overrides)
 
 
-def create(name, /, *traits, **overrides):
+def create(name: str, /, *traits: str, **overrides: Any) -> Any:
     return _run("create", name, traits, overrides)
 
 
-def attributes_for(name, /, *traits, **overrides):
+def attributes_for(name: str, /, *traits: str, **overrides: Any) -> dict[str, Any]:
     return _run("attributes_for", name, traits, overrides)
 
 
-def build_list(name, count, /, *traits, **overrides):
+def build_list(name: str, count: int, /, *traits: str, **overrides: Any) -> list[Any]:
     return [build(name, *traits, **overrides) for _ in range(count)]
 
 
-def create_list(name, count, /, *traits, **overrides):
+def create_list(name: str, count: int, /, *traits: str, **overrides: Any) -> list[Any]:
     return [create(name, *traits, **overrides) for _ in range(count)]
 
 
-def build_pair(name, /, *traits, **overrides):
+def build_pair(name: str, /, *traits: str, **overrides: Any) -> list[Any]:
     return build_list(name, 2, *traits, **overrides)
 
 
-def create_pair(name, /, *traits, **overrides):
+def create_pair(name: str, /, *traits: str, **overrides: Any) -> list[Any]:
     return create_list(name, 2, *traits, **overrides)
 
 
@@ -48,7 +50,7 @@ def _set_to_create(fn):
     return fn
 
 
-def sequence(fn):
+def sequence(fn: Callable[[int], Any]) -> "_Sequence":
     """A value built from a counter that starts at 1, e.g. sequence(lambda n: f"user{n}")."""
     try:
         inspect.signature(fn).bind(1)
@@ -61,21 +63,21 @@ def sequence(fn):
     return _Sequence(fn)
 
 
-def association(name, /, *traits, **overrides):
+def association(name: str, /, *traits: str, **overrides: Any) -> "_Association":
     """Another factory's object, built or created along with this one."""
     return _Association(name, traits, overrides)
 
 
-def transient(value):
+def transient(value: object) -> "_Transient":
     """An attribute other attributes can depend on that never reaches the model."""
     return _Transient(value)
 
 
-def clear_factories():
+def clear_factories() -> None:
     _registry.clear()
 
 
-def reset_sequences():
+def reset_sequences() -> None:
     for seq in _sequences:
         seq.reset()
 

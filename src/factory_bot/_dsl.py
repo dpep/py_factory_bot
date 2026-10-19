@@ -16,14 +16,15 @@ _stack: ContextVar[tuple[_Definition, ...]] = ContextVar(
 )
 
 
-def factory(model: Callable[..., Any], /) -> Any:
+def factory(model: Callable[..., Any], /) -> Callable[[Body], Body]:
     """@factory(User) registers a factory; nested in one, bare @factory declares a child."""
     if _is_body(model):
         if not _stack.get():
             raise FactoryError(
                 f"@factory needs a model: write @factory(User) or @factory(dict) above def {model.__name__}"
             )
-        return _define(model, None)
+        # Typed for @factory(Model); the bare nested form's return value is never used.
+        return _define(model, None)  # type: ignore[return-value]
     return lambda body: _define(body, model)
 
 
@@ -138,7 +139,7 @@ def _is_body(obj):
     return inspect.isfunction(obj) and not inspect.signature(obj).parameters
 
 
-def _callback(kind):
+def _callback(kind: str) -> Callable[[Fn], Fn]:
     def decorate(fn: Fn) -> Fn:
         _current(f"@{kind} def {fn.__name__}", kinds=("factory", "trait")).callbacks[
             kind
