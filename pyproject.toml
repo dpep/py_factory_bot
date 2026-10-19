@@ -50,6 +50,7 @@ only-include = ["src", "tests", "CHANGELOG.md", "LICENSE.txt", "README.md", "pyp
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tests"]
 addopts = ["--import-mode=importlib", "--strict-markers"]
 xfail_strict = true
 
