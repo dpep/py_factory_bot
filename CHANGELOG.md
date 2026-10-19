@@ -2,14 +2,14 @@
 
 ## Unreleased
 
-- `create` builds and then saves: `obj.save()` by default, or a global hook set with `to_create(fn)`.
+- `create` builds and then saves: `obj.save()` by default, or as set globally with `persist_with`: a function called with each object, a SQLAlchemy session, or `None` for `obj.save()` again.
 - `build_list` / `create_list`.
 - `association("user", *traits, **overrides)` builds or creates another factory's object to match the parent; `attributes_for` leaves it out.
 - `transient(value)` declares an input other attributes can depend on, kept out of the model and `attributes_for`.
 - Breaking: factory and trait bodies take no parameters. Drop the `f` parameter, import it instead (`from factory_bot import f`), and write `@trait` instead of `@f.trait`. An old-style body raises an error showing the new form.
 - Child factories: a bare `@factory` nested in a factory body inherits its model, attributes, traits and sequences; nest `@factory(Model)` to switch model.
 - `@after_build` / `@after_create` callbacks get the instance first and other attributes, transients included, by parameter name. They run in definition order: parent, child, then traits.
-- SQLAlchemy: `factory_bot.to_create(persist_with(session))` adds and flushes each created object without committing, so the test's transaction still decides. Takes a `Session` or `scoped_session`.
+- SQLAlchemy: `persist_with(session)` adds and flushes each created object without committing, so the test's transaction still decides. Takes a `Session` or `scoped_session`.
 - pytest plugin, on by default: `fake` is reseeded before each test from the test's node id, so its data is the same alone, in the suite or in any order (a module- or session-scoped fixture's data is not: it takes the seed of the first test that uses it); with pytest-randomly, `--randomly-seed` drives it. Set `factory_bot_reset_sequences = true` to restart sequences per test. Disable with `-p no:factory_bot`.
 - `seed()` also forgets the values `fake.unique` has handed out, so the same seed gives the same data whatever ran before. Under the pytest plugin each test starts with a fresh unique pool, so a test no longer fails with `UniquenessException` depending on which tests ran first.
 - A second trait with the same name in one factory is an error naming where the first is defined; it used to replace the first silently. A child may still redefine its parent's trait.
@@ -23,7 +23,7 @@
 - "Factory 'user' is already defined" shows the first definition's full path, and points at `clear_factories()` for redefining in a REPL or after a reload.
 <!-- lane: r2-fake -->
 - `fake.x()` inside a factory or trait body is now an error: it ran once, at definition, so every build got the same value. Drop the parentheses (`f.name = fake.first_name`), or wrap a call with arguments in a lambda. `fake.unique.x()` and `fake.optional.x()` are caught too; calls in lambdas, callbacks and at module level are unchanged.
-- pytest plugin: a `to_create` hook set by a test or one of its function-scoped fixtures is undone after the test, so a fixture that sets it without teardown can no longer leak a closed session into later tests. A hook set at import (in a conftest) or by a session-, module- or class-scoped fixture stays: undo those in the fixture's own teardown.
+- pytest plugin: a `persist_with` hook set by a test or one of its function-scoped fixtures is undone after the test, so a fixture that sets it without teardown can no longer leak a closed session into later tests. A hook set at import (in a conftest) or by a session-, module- or class-scoped fixture stays: undo those in the fixture's own teardown.
 <!-- /lane -->
 <!-- lane: r2-core -->
 - `@factory(User)` returns the factory itself, a `Factory[User]`. Pass it wherever a factory's name goes, `build(user)` or `association(user)`, and a type checker knows the result is a `User`; a name still works and gives `Any`. Nothing to change: calling the old return value never worked.

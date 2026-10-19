@@ -234,7 +234,7 @@ build_list("user", 3, "admin")  # three users; create_list saves each
 
 `create` builds the object, then saves it. By default that means calling `obj.save()`, which is all a Django model needs: there's nothing to configure.
 
-For anything else, set a hook with `persist_with(fn)`. At top level it applies to every factory, across the whole process; `persist_with(None)` puts `obj.save()` back.
+For anything else, use `persist_with`. It takes a function, called with each created object; or a SQLAlchemy session; or `None`, which puts `obj.save()` back. It applies to every factory, across the whole process.
 
 ```python
 from factory_bot import persist_with
@@ -253,16 +253,14 @@ assert saved == [{"name": "launch"}]
 persist_with(None)
 ```
 
-For SQLAlchemy, `persist_with(session)` adds each created object to the session and flushes, so ids and foreign keys are set but nothing is committed: your test's transaction still decides.
+For SQLAlchemy, pass the test's session. Each created object is added and flushed, so ids and foreign keys are set, but nothing is committed: your test's transaction still decides.
 
 <!-- skip-doctest -->
 ```python
-import factory_bot.sqlalchemy
-
-persist_with(factory_bot.sqlalchemy.persist_with(session))
+persist_with(session)
 ```
 
-The hook is global, so reset it with `persist_with(None)` when the test's session goes away, or a later test writes into a closed session. The [guide](https://github.com/dpep/py_factory_bot/blob/main/docs/guide.md#sqlalchemy-fixtures) has a fixture that does.
+The pytest plugin puts the previous setting back after each test, so a function-scoped fixture can call it without teardown. The [guide](https://github.com/dpep/py_factory_bot/blob/main/docs/guide.md#sqlalchemy-fixtures) has the full fixture.
 
 ### Faker
 
