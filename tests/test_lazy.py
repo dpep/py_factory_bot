@@ -3,7 +3,15 @@ import re
 
 import pytest
 
-from factory_bot import FactoryError, build, f, factory
+from factory_bot import (
+    FactoryError,
+    attributes_for,
+    build,
+    f,
+    factory,
+    sequence,
+    transient,
+)
 
 
 def test_callables_are_called_on_every_build():
@@ -127,4 +135,29 @@ def test_reading_f_at_build_time_names_the_factory_and_the_fix():
     assert str(excinfo.value) == (
         "Factory 'user': can't read f.first_name: f only declares attributes."
         " To use another attribute, take it as a parameter: lambda first_name: ..."
+    )
+
+
+@pytest.mark.parametrize(
+    "returns",
+    [lambda: sequence(lambda n: n), lambda: transient(1)],
+    ids=["sequence", "transient"],
+)
+@pytest.mark.parametrize("strategy", [build, attributes_for])
+def test_a_marker_returned_by_a_function_is_an_error(returns, strategy):
+    @factory(dict)
+    def user():
+        f.name = returns
+
+    with pytest.raises(FactoryError) as excinfo:
+        strategy("user")
+    assert re.fullmatch(
+        r"Factory 'user': <\w+ .+> was returned from a function, so it was never evaluated:"
+        r" a sequence\(\), association\(\) or transient\(\) works only as an attribute's"
+        r" whole value, never returned from a function or inside a container\.",
+        str(excinfo.value),
+    )
+    assert re.fullmatch(
+        r"while building factory 'user', attribute 'name' \(test_lazy\.py:\d+\)",
+        excinfo.value.__notes__[0],
     )

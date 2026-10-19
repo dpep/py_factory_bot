@@ -167,6 +167,12 @@ class _Marker:
     """A declaration evaluated at build time, rather than a value used as given."""
 
 
+_MARKER_RULE = (
+    "a sequence(), association() or transient() works only as an attribute's whole value,"
+    " never returned from a function or inside a container."
+)
+
+
 class _Sequence(_Marker):
     def __init__(self, fn):
         self.fn = fn
@@ -249,7 +255,12 @@ class _Evaluator:
             raise self.error(f"circular dependency: {cycle}")
         self.resolving.append(name)
         try:
-            self.values[name] = self.evaluate(name, self.definitions[name])
+            value = self.evaluate(name, self.definitions[name])
+            if isinstance(value, _Marker):  # only a function's result can be one
+                raise FactoryError(
+                    f"{value!r} was returned from a function, so it was never evaluated: {_MARKER_RULE}"
+                )
+            self.values[name] = value
         except Exception as e:
             self.note(
                 e, f", attribute {name!r}{_where(_source(self.definitions[name]))}"
