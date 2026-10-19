@@ -129,13 +129,6 @@ class _Definition:
     def lineage(self):
         return [*(self.parent.lineage() if self.parent else []), self]
 
-    def find_model(self):
-        return next(d.model for d in reversed(self.lineage()) if d.model)
-
-    def layers(self, trait_names):
-        """The lineage then the named traits: later layers win, callbacks run in this order."""
-        return [*self.lineage(), *self._find_traits(trait_names)]
-
     def _find_traits(self, names):
         traits = {name: t for d in self.lineage() for name, t in d.traits.items()}
         for name in names:
@@ -184,18 +177,17 @@ class _Plan:
     """One build's declarations, every layer applied: which value wins for each name, and its kind."""
 
     factory: str
-    definitions: dict[
-        str, Any
-    ]  # declaration order; overrides wrapped in _Given unless a marker
-    transients: set[
-        str
-    ]  # transient in any layer stays transient, whatever a later layer assigns
-    declared: set[str]  # what the factory and its traits declare, overrides aside
+    # In declaration order. Overrides are wrapped in _Given, unless a marker.
+    definitions: dict[str, Any]
+    # Transient in any layer stays transient, whatever a later layer assigns.
+    transients: set[str]
+    # What the factory and its traits declare, overrides aside.
+    declared: set[str]
     model: Callable[..., Any]
-    to_create: (
-        Callable[[Any], Any] | None
-    )  # the nearest factory's hook; None defers to the global one
-    callbacks: dict[str, list[Callable[..., Any]]]  # by kind, in layer order
+    # The nearest factory's hook. None defers to the global one, read when saving.
+    to_create: Callable[[Any], Any] | None
+    # By kind, in layer order.
+    callbacks: dict[str, list[Callable[..., Any]]]
 
 
 def _register(definition):
@@ -264,36 +256,24 @@ class _Given:
 class _Evaluator:
     """Resolves one build's attributes, each at most once, in dependency order."""
 
-    def __init__(self, strategy, factory_name, layers, overrides, via=None):
+    def __init__(self, strategy, plan, via=None):
         self.strategy = strategy
-        self.factory_name = factory_name
+        self.plan = plan
         self.via = via  # (label, key) of the association that started this build
-        # Overrides are the last layer. A marker in one evaluates like a definition;
-        # anything else is a plain value, never called.
-        given = {
-            n: v if isinstance(v, _Marker) else _Given(v) for n, v in overrides.items()
-        }
-        self.declared = {n for layer in layers for n in layer.attributes}
-        layers = [*(layer.attributes for layer in layers), given]
-        self.definitions = {n: v for layer in layers for n, v in layer.items()}
-        # Transient in any layer stays transient, whatever a later layer assigns.
-        self.transients = {
-            n for layer in layers for n, v in layer.items() if isinstance(v, _Transient)
-        }
         self.values = {}
         self.resolving = []
         self.noted = None  # the exception this build last annotated
 
     def attributes(self):
-        names = self.definitions.keys()  # declaration order
+        names = self.plan.definitions.keys()  # declaration order
         return {name: self.get(name) for name in names if self.exposes(name)}
 
     def exposes(self, name):
-        if name in self.transients:
+        if name in self.plan.transients:
             return False
         return not (
             self.strategy == "attributes_for"
-            and isinstance(self.definitions.get(name), _Association)
+            and isinstance(self.plan.definitions.get(name), _Association)
         )
 
     def get(self, name):
@@ -304,7 +284,7 @@ class _Evaluator:
             raise self.error(f"circular dependency: {cycle}")
         self.resolving.append(name)
         try:
-            value = self.evaluate(name, self.definitions[name])
+            value = self.evaluate(name, self.plan.definitions[name])
             if isinstance(value, _Marker):  # only a function's result can be one
                 raise FactoryError(
                     f"{value!r} was returned from a function, so it was never evaluated: {_MARKER_RULE}"
@@ -312,7 +292,7 @@ class _Evaluator:
             self.values[name] = value
         except Exception as e:
             self.note(
-                e, f", attribute {name!r}{_where(_source(self.definitions[name]))}"
+                e, f", attribute {name!r}{_where(_source(self.plan.definitions[name]))}"
             )
             raise
         finally:
@@ -340,16 +320,16 @@ class _Evaluator:
     def note(self, e, detail="", verb="building"):
         # A dependency's failure is noted where it happened, not again by each dependent.
         if e is not self.noted:
-            e.add_note(f"while {verb} factory {self.factory_name!r}{detail}")
+            e.add_note(f"while {verb} factory {self.plan.factory!r}{detail}")
             self.noted = e
 
     def call(self, name, fn, *leading):
         positional, keyword = _dependencies(fn, skip=len(leading))
         for dep in [*positional, *keyword]:
-            if dep not in self.definitions:
+            if dep not in self.plan.definitions:
                 raise self.error(
                     f"{name!r} depends on {dep!r}, which is not defined."
-                    f"{_suggest(dep, self.definitions)}{_where(fn)}"
+                    f"{_suggest(dep, self.plan.definitions)}{_where(fn)}"
                 )
         args = [self.get(dep) for dep in positional]
         return fn(*leading, *args, **{dep: self.get(dep) for dep in keyword})
@@ -370,7 +350,7 @@ class _Evaluator:
             assoc.traits,
             [(k, id(v)) for k, v in assoc.overrides.items()],
         )
-        label = f"{self.factory_name}.{name}" if name else self.factory_name
+        label = f"{self.plan.factory}.{name}" if name else self.plan.factory
         building = _building.get()
         for i, outer in enumerate(building):
             if outer.via and outer.via[1] == key:
@@ -388,66 +368,64 @@ def _run(strategy, name, traits, overrides, via=None):
             f" Make it lazy: lambda: {strategy}({name!r}), or use association({name!r})",
         )
     # Outside the frame below: an unknown factory or trait is the caller's mistake.
-    fac = _lookup(name)
-    layers = fac.layers(traits)
-    evaluator = _Evaluator(strategy, fac.name, layers, overrides, via)
+    plan = _lookup(name).resolve(traits, overrides)
+    evaluator = _Evaluator(strategy, plan, via)
     token = _building.set((*_building.get(), evaluator))
     try:
-        return _construct(strategy, fac, layers, evaluator)
+        return _construct(strategy, plan, evaluator)
     except FactoryError as e:
-        e.factory = e.factory or fac.name  # the innermost frame wins
+        e.factory = e.factory or plan.factory  # the innermost frame wins
         raise
     finally:
         _building.reset(token)
 
 
-def _construct(strategy, fac, layers, evaluator):
+def _construct(strategy, plan, evaluator):
     attributes = evaluator.attributes()
     if strategy == "attributes_for":
         return attributes
     try:
-        obj = fac.find_model()(**attributes)
+        obj = plan.model(**attributes)
     except Exception as e:
         evaluator.note(e)
         if isinstance(e, TypeError):
             _note_unknown_keywords(e, evaluator, attributes)
         raise
-    _run_callbacks(evaluator, layers, "after_build", obj)
+    _run_callbacks(evaluator, plan.callbacks["after_build"], obj)
     if strategy == "create":
         try:
-            _persist(evaluator, fac, obj)
+            _persist(evaluator, plan.to_create or _to_create, obj)
         except Exception as e:
             evaluator.note(e, verb="saving")
             raise
-        _run_callbacks(evaluator, layers, "after_create", obj)
+        _run_callbacks(evaluator, plan.callbacks["after_create"], obj)
     return obj
 
 
-def _run_callbacks(evaluator, layers, kind, obj):
-    for layer in layers:
-        for callback in layer.callbacks[kind]:
-            name = getattr(callback, "__name__", repr(callback))
-            try:
-                evaluator.call(name, callback, obj)
-            except Exception as e:
-                evaluator.note(e, f", callback {name!r}{_where(callback)}")
-                raise
+def _run_callbacks(evaluator, callbacks, obj):
+    for callback in callbacks:
+        name = getattr(callback, "__name__", repr(callback))
+        try:
+            evaluator.call(name, callback, obj)
+        except Exception as e:
+            evaluator.note(e, f", callback {name!r}{_where(callback)}")
+            raise
 
 
 def _note_unknown_keywords(e, evaluator, attributes):
     # Models word it differently (dataclass, Django, SQLAlchemy), but all quote the name.
     rejected = [n for n in re.findall(r"'(\w+)'", str(e)) if n in attributes]
     for name in dict.fromkeys(rejected):
-        if name not in evaluator.declared and (
-            hint := _suggest(name, evaluator.declared)
+        if name not in evaluator.plan.declared and (
+            hint := _suggest(name, evaluator.plan.declared)
         ):
             e.add_note(
-                f"{name!r} is not an attribute of factory {evaluator.factory_name!r}.{hint}"
+                f"{name!r} is not an attribute of factory {evaluator.plan.factory!r}.{hint}"
             )
     for name in attributes:
         if "__" in name:
             head, _, rest = name.partition("__")
-            target = evaluator.definitions.get(head)
+            target = evaluator.plan.definitions.get(head)
             target = target.name if isinstance(target, _Association) else head
             e.add_note(
                 f"{name!r}: deep overrides aren't supported."
@@ -455,10 +433,7 @@ def _note_unknown_keywords(e, evaluator, attributes):
             )
 
 
-def _persist(evaluator, fac, obj):
-    hook = next(
-        (d.to_create for d in reversed(fac.lineage()) if d.to_create), _to_create
-    )
+def _persist(evaluator, hook, obj):
     if hook:
         hook(obj)
         return
