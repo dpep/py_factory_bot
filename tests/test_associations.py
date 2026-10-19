@@ -74,3 +74,17 @@ def test_attributes_for_still_builds_an_association_another_attribute_needs():
         f.byline = lambda author: f"by {author.first_name}"
 
     assert attributes_for("post") == {"byline": "by Ann"}
+
+
+def test_containers_in_association_overrides_are_not_shared_between_builds():
+    @factory(User)
+    def user():
+        pass
+
+    @factory(Post)
+    def post():
+        f.author = association("user", tags=[])
+
+    first, second = build("post"), build("post")
+    first.author.tags.append("x")
+    assert second.author.tags == []
