@@ -22,10 +22,6 @@ classifiers = [
   "Typing :: Typed",
 ]
 
-[project.optional-dependencies]
-django = ["django"]
-sqlalchemy = ["sqlalchemy >= 2"]
-
 [project.entry-points.pytest11]
 factory_bot = "factory_bot.pytest_plugin"
 
