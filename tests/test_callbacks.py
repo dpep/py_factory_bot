@@ -148,10 +148,6 @@ def test_a_partial_is_accepted_as_a_callback():
         after_build(functools.partial(lambda calls, user: None, []))
 
 
-@pytest.mark.xfail(
-    raises=AttributeError,
-    reason="lane A: _core._run_callbacks reads callback.__name__",
-)
 def test_a_partial_callback_runs():
     def record(calls, user, first_name):
         calls.append(first_name)

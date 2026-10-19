@@ -301,7 +301,7 @@ def _construct(strategy, fac, layers, evaluator):
 def _run_callbacks(evaluator, layers, kind, obj):
     for layer in layers:
         for callback in layer.callbacks[kind]:
-            evaluator.call(callback.__name__, callback, obj)
+            evaluator.call(getattr(callback, "__name__", repr(callback)), callback, obj)
 
 
 def _persist(fac, obj):
