@@ -162,8 +162,12 @@ class _Definition:
     def lineage(self):
         return [*(self.parent.lineage() if self.parent else []), self]
 
+    def visible_traits(self):
+        """Every trait this factory can apply, its own winning over a parent's of the same name."""
+        return {name: t for d in self.lineage() for name, t in d.traits.items()}
+
     def _find_traits(self, names):
-        traits = {name: t for d in self.lineage() for name, t in d.traits.items()}
+        traits = self.visible_traits()
         for name in names:
             if name not in traits:
                 raise FactoryError(
