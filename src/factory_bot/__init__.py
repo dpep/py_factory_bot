@@ -1,5 +1,6 @@
 from ._core import (
     FactoryError,
+    association,
     attributes_for,
     build,
     build_list,
@@ -20,6 +21,7 @@ __version__ = "0.0.1"
 
 __all__ = [
     "FactoryError",
+    "association",
     "attributes_for",
     "build",
     "build_list",

@@ -83,6 +83,11 @@ def sequence(fn):
     return _Sequence(fn)
 
 
+def association(name, /, *traits, **overrides):
+    """Another factory's object, built or created along with this one."""
+    return _Association(name, traits, overrides)
+
+
 def clear_factories():
     _registry.clear()
 
@@ -124,6 +129,11 @@ class _Sequence:
         return self.fn(next(self.counter))
 
 
+class _Association:
+    def __init__(self, name, traits, overrides):
+        self.name, self.traits, self.overrides = name, traits, overrides
+
+
 class _Definition:
     """The `f` in `def user(f):`. Assigning to it declares an attribute."""
 
@@ -151,7 +161,8 @@ class _Definition:
 class _Evaluator:
     """Resolves one build's attributes, each at most once, in dependency order."""
 
-    def __init__(self, factory_name, definitions, overrides):
+    def __init__(self, strategy, factory_name, definitions, overrides):
+        self.strategy = strategy
         self.factory_name = factory_name
         self.definitions = definitions
         self.values = dict(overrides)  # overrides are plain values, never called
@@ -159,7 +170,13 @@ class _Evaluator:
 
     def attributes(self):
         names = (self.definitions | self.values).keys()  # declaration order
-        return {name: self.get(name) for name in names}
+        return {name: self.get(name) for name in names if self.exposes(name)}
+
+    def exposes(self, name):
+        value = self.definitions.get(name)
+        return not (
+            self.strategy == "attributes_for" and isinstance(value, _Association)
+        )
 
     def get(self, name, needed_by=None):
         if name in self.values:
@@ -185,6 +202,8 @@ class _Evaluator:
     def evaluate(self, name, value):
         if isinstance(value, _Sequence):
             return value.next()
+        if isinstance(value, _Association):
+            return self.associate(name, value)
         if callable(value):
             return value(
                 **{dep: self.get(dep, needed_by=name) for dep in _dependencies(value)}
@@ -193,10 +212,22 @@ class _Evaluator:
             return copy.copy(value)
         return value
 
+    def associate(self, name, assoc):
+        if assoc.name not in _registry:
+            raise FactoryError(
+                f"Factory {self.factory_name!r}: {name!r} is an association to {assoc.name!r},"
+                f" which is not a factory.{_suggest(assoc.name, _registry)}"
+            )
+        # attributes_for omits associations, but a dependent attribute may still need the object.
+        strategy = "create" if self.strategy == "create" else "build"
+        return _run(strategy, assoc.name, assoc.traits, assoc.overrides)
+
 
 def _run(strategy, name, traits, overrides):
     fac = _lookup(name)
-    attributes = _Evaluator(fac.name, fac.definitions(traits), overrides).attributes()
+    attributes = _Evaluator(
+        strategy, fac.name, fac.definitions(traits), overrides
+    ).attributes()
     if strategy == "attributes_for":
         return attributes
     obj = fac.model(**attributes)
