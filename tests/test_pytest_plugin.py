@@ -52,6 +52,48 @@ def test_each_test_gets_its_own_data(suite):
     assert data["test_a"] != data["test_b"]
 
 
+SCOPED = """
+import pytest
+from factory_bot import fake
+
+@pytest.fixture(scope="module")
+def shared():
+    return fake.name()
+
+def test_a(shared):
+    print(f"test_a={shared}|{fake.name()}")
+
+def test_b():
+    print(f"test_b={fake.name()}")
+
+def test_c(shared):
+    print(f"test_c={shared}|{fake.name()}")
+"""
+
+
+@pytest.fixture
+def scoped(pytester):
+    pytester.makepyfile(test_scoped=SCOPED)
+    return pytester
+
+
+def test_a_module_fixtures_data_is_the_same_whichever_test_sets_it_up(scoped):
+    shared = {
+        names(run(scoped))["test_c"].split("|")[0],
+        names(run(scoped, "test_scoped.py::test_c"))["test_c"].split("|")[0],
+        names(run(scoped, "test_scoped.py::test_c", "test_scoped.py::test_a"))[
+            "test_c"
+        ].split("|")[0],
+    }
+    assert len(shared) == 1
+
+
+def test_setting_up_a_module_fixture_leaves_the_tests_own_data_alone(scoped):
+    # Alone, test_c sets the fixture up; in the suite, test_a already has.
+    alone = names(run(scoped, "test_scoped.py::test_c"))["test_c"]
+    assert alone == names(run(scoped))["test_c"]
+
+
 def test_the_seed_is_in_the_header(suite):
     run(suite).stdout.fnmatch_lines(["factory_bot: seed=0"])
 
@@ -158,11 +200,62 @@ def test_a_session_fixtures_persist_with_hook_stays_while_the_session_fixture_do
     assert data["test_e_after_session"] == "in_session"
 
 
+MODULE_HOOK = """
+import pytest
+from factory_bot import _core, persist_with
+
+def in_module(obj): ...
+
+@pytest.fixture(scope="module")
+def module_hook():
+    persist_with(in_module)  # no undo
+    yield
+    print(f"teardown={_core._persist_hook.__name__}")
+
+def test_m1(module_hook):
+    print(f"test_m1={_core._persist_hook.__name__}")
+"""
+
+NEXT_MODULE = """
+from factory_bot import _core
+
+def test_m2():
+    print(f"test_m2={_core._persist_hook.__name__}")
+"""
+
+
+@pytest.fixture
+def modules(hooks):
+    hooks.makepyfile(test_m1=MODULE_HOOK, test_m2=NEXT_MODULE)
+    return hooks
+
+
+def test_a_module_fixtures_persist_with_hook_is_undone_after_its_teardown(modules):
+    result = run(modules, "test_m1.py", "test_m2.py")
+    assert names(result) == {"test_m1": "in_module", "test_m2": "at_import"}
+    # Undone after the fixture's own teardown, which may still save with it.
+    assert "teardown=in_module" in result.stdout.str()
+
+
+def test_a_session_fixtures_persist_with_hook_lasts_the_session(hooks):
+    hooks.makepyfile(
+        test_s1="def test_s1(session_hook):\n    print('test_s1=ok')",
+        test_s2=NEXT_MODULE,
+    )
+    data = names(run(hooks, "test_s1.py", "test_s2.py"))
+    assert data["test_m2"] == "in_session"
+
+
 def test_p_no_factory_bot_leaves_the_persist_with_hook_alone(hooks):
     data = names(run(hooks, "-p", "no:factory_bot"))
     assert data["test_a_fixture"] == "in_fixture"
     assert data["test_b_body"] == "in_test"
     assert data["test_c_after"] == "in_test"
+
+
+def test_p_no_factory_bot_leaves_a_module_fixtures_hook_in_place(modules):
+    data = names(run(modules, "test_m1.py", "test_m2.py", "-p", "no:factory_bot"))
+    assert data["test_m2"] == "in_module"
 
 
 def test_pytest_randomly_seed_drives_the_data_too(suite):
@@ -176,6 +269,17 @@ def test_pytest_randomly_seed_drives_the_data_too(suite):
     assert randomly(1) == randomly(1)
     assert randomly(1) != randomly(2)
     assert randomly(1, "test_data.py::test_b")["test_b"] == randomly(1)["test_b"]
+
+
+def test_pytest_randomly_seed_drives_scoped_fixtures_too(scoped):
+    pytest.importorskip("pytest_randomly")
+
+    def randomly(seed, *args):
+        return names(scoped.runpytest("-s", f"--randomly-seed={seed}", *args))
+
+    # Each seed shuffles the tests differently, so the first to set `shared` up varies.
+    assert randomly(1)["test_c"] == randomly(1, "test_scoped.py::test_c")["test_c"]
+    assert randomly(1)["test_a"].split("|")[0] != randomly(2)["test_a"].split("|")[0]
 
 
 UNIQUE = """

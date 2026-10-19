@@ -25,7 +25,9 @@
 - `@factory(User)` returns a `Factory[User]`. Pass it wherever a name goes, as in `build(user)` or `association(user)`, and a type checker knows the result is a `User`. Names still work and give `Any`.
 - A sequence's function gets the counter first, then other attributes by name: `sequence(lambda n, title: f"{slugify(title)}-{n}")`.
 - `lint()` builds every factory once, then once with each trait, and raises one error listing every call that failed, ready to paste into a test.
-- A pytest plugin, on by default. Before each test it reseeds `fake` from the test's id, so a test's fake data is the same alone, in the suite or in any order; with pytest-randomly, `--randomly-seed` drives it, and the seed is in the report header. After each test it undoes a `persist_with` the test or its function-scoped fixtures set. `factory_bot_reset_sequences = true` restarts sequences per test. Disable it with `-p no:factory_bot`.
+<!-- lane: sus2-plugin -->
+- A pytest plugin, on by default. It reseeds `fake` before each test from the test's id, and for each fixture from its name and the test, module or session it belongs to, so every test and fixture gets the same fake data alone, in the suite, in any order or under pytest-xdist; with pytest-randomly, `--randomly-seed` drives it, and the seed is in the report header. A `persist_with` set by a test or a fixture of any scope is undone when that test or fixture ends. `factory_bot_reset_sequences = true` restarts sequences per test. Disable it with `-p no:factory_bot`.
+<!-- /lane -->
 
 ### Changed
 
