@@ -66,7 +66,7 @@ def test_lint_reports_every_failing_build_as_a_call_to_reproduce():
     ]
 
 
-def test_lint_without_traits_and_for_some_factories():
+def test_lint_for_some_factories_covers_only_those_and_their_traits():
     @factory(User)
     def user():
         f.name = "Ann"
@@ -79,9 +79,12 @@ def test_lint_without_traits_and_for_some_factories():
     def post():
         f.title = lambda missing: missing
 
-    lint(user, traits=False)
-    with pytest.raises(FactoryError, match=r"^lint: 1 of 1 builds failed:"):
-        lint("post")
+    with pytest.raises(
+        FactoryError, match=r"^lint: 1 of 2 builds failed:\n  build\('user', 'broken'\)"
+    ):
+        lint(user)
+    with pytest.raises(TypeError, match="traits"):
+        lint(user, traits=False)  # pyright: ignore[reportCallIssue]
 
 
 def test_lint_create_saves_through_the_hook():

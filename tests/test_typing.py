@@ -89,7 +89,7 @@ def test_the_public_api_has_honest_types():
     assert_type(association(book), Any)
     assert_type(association("book"), Any)
     assert_type(lint(), None)
-    assert_type(lint(book, "shelf", traits=False), None)
+    assert_type(lint(book, "shelf"), None)
     assert_type(lint(book, strategy="create"), None)
 
     assert_type(persist_with(None), None)

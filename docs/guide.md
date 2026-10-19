@@ -659,6 +659,6 @@ Using, where `factory` is a `Factory` or its name:
 | `build`, `create`, `attributes_for` `(factory, *traits, **overrides)` | One object, one saved object, or one dict. |
 | `build_list`, `create_list` `(factory, n, *traits, **overrides)` | A list of `n`. |
 | `persist_with(fn \| session \| None)` | How `create` saves. |
-| `lint(*factories, strategy="build", traits=True)` | Build every factory and trait; report every failure. |
+| `lint(*factories, strategy="build")` | Build every factory and trait; report every failure. |
 
 Housekeeping: `fake` (a shared `Faker`), `seed(value)`, `reset_sequences()`, `clear_factories()`, `Factory`, and `FactoryError`.

@@ -104,7 +104,6 @@ def create_list(factory: Any, count: int, /, *traits: str, **overrides: Any) -> 
 def lint(
     *factories: str | Factory[Any],
     strategy: Literal["build", "create"] = "build",
-    traits: bool = True,
 ) -> None:
     """Build every factory (or those given) once, then once with each trait; raise one error listing every failure.
 
@@ -121,7 +120,7 @@ def lint(
     calls = [
         (d.name, case)
         for d in definitions
-        for case in [(), *((t,) for t in d.visible_traits() if traits)]
+        for case in [(), *((t,) for t in d.visible_traits())]
     ]
     failures = []
     for name, case in calls:
