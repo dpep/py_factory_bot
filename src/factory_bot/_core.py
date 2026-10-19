@@ -236,9 +236,7 @@ class _Evaluator:
             return self.values[name]
         if name in self.resolving:
             cycle = " -> ".join([*self.resolving[self.resolving.index(name) :], name])
-            raise FactoryError(
-                f"circular dependency: {cycle}", factory=self.factory_name
-            )
+            raise FactoryError(f"circular dependency: {cycle}")
         self.resolving.append(name)
         try:
             self.values[name] = self.evaluate(name, self.definitions[name])
@@ -277,7 +275,6 @@ class _Evaluator:
                 raise FactoryError(
                     f"{name!r} depends on {dep!r}, which is not defined."
                     f"{_suggest(dep, self.definitions)}{_where(fn)}",
-                    factory=self.factory_name,
                 )
         args = [self.get(dep) for dep in positional]
         return fn(*leading, *args, **{dep: self.get(dep) for dep in keyword})
@@ -289,7 +286,6 @@ class _Evaluator:
             raise FactoryError(
                 f"{what} to {assoc.name!r}, which is not a factory."
                 f"{_suggest(assoc.name, _registry)}",
-                factory=self.factory_name,
             )
         # attributes_for omits associations, but a dependent attribute may still need the object.
         strategy = "create" if self.strategy == "create" else "build"
@@ -306,17 +302,15 @@ class _Evaluator:
                 chain = [e.via[0] for e in building[i:] if e.via]
                 raise FactoryError(
                     f"circular association: {' -> '.join([*chain, label])}",
-                    factory=self.factory_name,
                 )
         return _run(strategy, assoc.name, assoc.traits, assoc.overrides, (label, key))
 
 
 def _run(strategy, name, traits, overrides, via=None):
-    if (defining := _defining_factory()) is not None:
+    if _defining_factory() is not None:
         raise FactoryError(
             f"{strategy}({name!r}) ran while a factory was being defined, so it would run once, at import."
             f" Make it lazy: lambda: {strategy}({name!r}), or use association({name!r})",
-            factory=defining,
         )
     # Outside the frame below: an unknown factory or trait is the caller's mistake.
     fac = _lookup(name)
@@ -397,7 +391,6 @@ def _persist(fac, obj):
         raise FactoryError(
             f"can't create a {type(obj).__name__}: it has no save()."
             " Give it a save() method, or set a hook with to_create(fn), at top level or inside the factory.",
-            factory=fac.name,
         )
     obj.save()
 

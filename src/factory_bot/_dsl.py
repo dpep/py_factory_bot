@@ -55,7 +55,6 @@ def trait(body: Body) -> Body:
     if existing := owner.traits.get(body.__name__):
         raise FactoryError(
             f"trait {body.__name__!r} is already defined{_where(existing.body)}",
-            factory=owner.name,
         )
     definition = _Definition(body.__name__, None, body, kind="trait")
     _run_body(definition, body)
@@ -98,7 +97,6 @@ class _F:
             raise _ReadError(
                 f"can't read f.{name} in a definition."
                 f" To use another attribute, take it as a parameter: lambda {name}: ...",
-                factory=_defining_factory(),
             )
 
     def __repr__(self) -> str:
@@ -155,7 +153,6 @@ def _current(what, kinds=("factory",)):
         raise FactoryError(
             f"{what} must be directly inside the factory,"
             f" not inside {stack[-1].kind} {stack[-1].name!r}",
-            factory=_defining_factory(),
         )
     return stack[-1]
 
@@ -184,7 +181,6 @@ def _callback(kind: str) -> Callable[[Fn], Fn]:
             raise FactoryError(
                 f"{shown} must take the instance first,"
                 f" then other attributes by name: def {name or 'callback'}({factory_name}, ...)",
-                factory=factory_name,
             )
         owner.callbacks[kind].append(fn)
         return fn
