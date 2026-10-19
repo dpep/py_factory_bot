@@ -230,6 +230,11 @@ class _Definition:
                 if isinstance(v, _Transient)
             },
             declared={n for layer in layers for n in layer.attributes},
+            associations={
+                n
+                for n, v in definitions.items()
+                if isinstance(v, _Association) and n not in overrides
+            },
             replaced={
                 key[:-3]: key
                 for key in overrides
@@ -259,6 +264,8 @@ class _Plan:
     transients: set[str]
     # What the factory and its traits declare, overrides aside.
     declared: set[str]
+    # Associations declared and not passed: attributes_for leaves them out.
+    associations: set[str]
     # Associations not made because an override gave their `<name>_id`: name -> that key.
     replaced: dict[str, str]
     model: Callable[..., Any]
@@ -345,8 +352,7 @@ class _Evaluator:
         if name in self.plan.transients or name in self.plan.replaced:
             return False
         return not (
-            self.strategy == "attributes_for"
-            and isinstance(self.plan.definitions.get(name), _Association)
+            self.strategy == "attributes_for" and name in self.plan.associations
         )
 
     def get(self, name):

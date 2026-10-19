@@ -34,3 +34,21 @@ def test_attributes_for_keeps_an_override_of_an_association():
         f.author = association("user")
 
     assert attributes_for("post", author=7) == {"title": "Hi", "author": 7}
+
+
+def test_attributes_for_keeps_any_association_passed_and_omits_only_declared_ones():
+    @factory(dict)
+    def account():
+        f.plan = "free"
+
+    @factory(dict)
+    def task():
+        f.title = "t"
+        f.account = association("account")
+        f.owner = association("account")
+
+    assert attributes_for(
+        "task",
+        account=association("account", plan="pro"),
+        reviewer=association("account"),
+    ) == {"title": "t", "account": {"plan": "pro"}, "reviewer": {"plan": "free"}}

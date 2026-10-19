@@ -92,6 +92,7 @@ def project(plan):
         "definitions": {n: kind(v) for n, v in plan.definitions.items()},
         "transients": plan.transients,
         "declared": plan.declared,
+        "associations": plan.associations,
         "model": plan.model,
         "replaced": plan.replaced,
         "callbacks": {k: [cb.__name__ for cb in v] for k, v in plan.callbacks.items()},
@@ -115,6 +116,7 @@ ROWS = {
             "definitions": USER,
             "transients": {"code"},
             "declared": set(USER),
+            "associations": {"boss"},
             "model": dict,
             "callbacks": {"after_build": ["stamp"], "after_create": []},
         },
@@ -145,6 +147,12 @@ ROWS = {
                 "boss": "<association 'plain'>",
             }
         },
+    ),
+    "an association passed, as a marker or a value, is not left out": (
+        "user",
+        (),
+        {"boss": association("plain"), "pal": association("plain")},
+        {"associations": set()},
     ),
     "a transient override is transient": (
         "plain",
