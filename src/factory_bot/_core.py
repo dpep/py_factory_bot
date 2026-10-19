@@ -125,7 +125,7 @@ class _Definition:
                     f"Factory {self.name!r} has no trait {name!r}.{_suggest(name, traits)}"
                     f" Traits: {', '.join(traits) or '(none)'}"
                 )
-        return [traits[name] for name in names]
+        return [traits[name] for name in dict.fromkeys(names)]  # each applies once
 
     def tree(self):
         return [self, *(d for child in self.children for d in child.tree())]

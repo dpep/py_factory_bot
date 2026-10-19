@@ -3,7 +3,7 @@ import re
 import pytest
 from support.models import User
 
-from factory_bot import FactoryError, build, f, factory, sequence, trait
+from factory_bot import FactoryError, after_build, build, f, factory, sequence, trait
 
 
 @pytest.fixture
@@ -71,3 +71,20 @@ def test_a_factory_without_traits_says_so():
         FactoryError, match=r"^Factory 'user' has no trait 'admin'\. Traits: \(none\)$"
     ):
         build("user", "admin")
+
+
+def test_a_trait_passed_twice_applies_once():
+    calls = []
+
+    @factory(dict)
+    def user():
+        @trait
+        def admin():
+            f.admin = True
+
+            @after_build
+            def record(user):
+                calls.append(user)
+
+    build("user", "admin", "admin")
+    assert len(calls) == 1
