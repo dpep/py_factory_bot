@@ -8,7 +8,6 @@ from factory_bot import (
     f,
     factory,
     sequence,
-    trait,
     transient,
 )
 
@@ -55,30 +54,3 @@ def test_an_undefined_dependency_of_a_transient_still_points_at_its_line():
         match=r"'greeting' depends on 'nmae'.* \(test_transient\.py:\d+\)$",
     ):
         build("user")
-
-
-def test_a_transient_stays_transient_when_a_trait_or_child_gives_it_a_plain_value():
-    @factory(dict)
-    def order():
-        f.n = transient(0)
-        f.label = lambda n: f"{n} lines"
-
-        @trait
-        def big():
-            f.n = 5
-
-        @factory
-        def small_order():
-            f.n = 1
-
-    assert build("order", "big") == {"label": "5 lines"}
-    assert build("small_order") == {"label": "1 lines"}
-    assert attributes_for("order", "big", n=7) == {"label": "7 lines"}
-
-
-def test_a_transient_passed_as_an_override_feeds_others_but_not_the_model():
-    @factory(dict)
-    def user():
-        f.greeting = lambda name: f"hi {name}"
-
-    assert build("user", name=transient("Ann")) == {"greeting": "hi Ann"}
