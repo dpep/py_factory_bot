@@ -58,11 +58,20 @@ def _define(body, model, parent):
             )
         parent = _current(f"@factory def {name}")
     elif parent is not None:
-        parent = _lookup(_name_of(parent))
+        parent_name = _name_of(parent)
+        try:
+            parent = _lookup(parent_name)
+        except FactoryError as e:
+            raise FactoryError(
+                f"{e} @factory(parent={parent_name!r}) def {name}:"
+                " a parent must be defined or imported before its child."
+            ) from None
     elif model is None:
+        # @factory(make_thing) with a zero-argument make_thing lands here too: same call.
         raise FactoryError(
             f"@factory needs a model or a parent: write @factory(User), @factory(dict)"
-            f" or @factory(parent=user) above def {name}"
+            f" or @factory(parent=user) above def {name}."
+            f" If {name} is the model, it must take the attributes as keyword arguments."
         )
     if model is not None and not callable(model):
         raise FactoryError(f"model {model!r} is not callable", factory=name)
@@ -100,7 +109,13 @@ class _F:
     __slots__ = ()
 
     def __setattr__(self, name: str, value: object) -> None:
-        _current(f"f.{name} = ...", kinds=("factory", "trait")).attributes[name] = value
+        owner = _current(f"f.{name} = ...", kinds=("factory", "trait"))
+        if isinstance(value, Factory):
+            raise FactoryError(
+                f"f.{name} = {value.name} stores the factory itself, not an object it makes."
+                f" Did you mean f.{name} = association({value.name})?"
+            )
+        owner.attributes[name] = value
 
     if not TYPE_CHECKING:  # reads stay a type error rather than Any
 

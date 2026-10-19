@@ -90,6 +90,55 @@ def test_a_body_that_raises_registers_nothing():
         f.x = 1
 
 
+def test_a_factory_handle_assigned_as_a_value_suggests_association():
+    @factory(dict)
+    def author():
+        f.name = "Ann"
+
+    message = (
+        r"^Factory 'book': f\.writer = author stores the factory itself, not an object it makes\."
+        r" Did you mean f\.writer = association\(author\)\?$"
+    )
+    with pytest.raises(FactoryError, match=message):
+
+        @factory(dict)
+        def book():
+            @trait
+            def signed():
+                f.writer = author
+
+    # Overrides are used as given, a handle included.
+    assert build(author, name=author) == {"name": author}
+
+
+def test_a_parent_defined_later_says_to_define_it_first():
+    message = (
+        r"^No factory named 'later'\. @factory\(parent='later'\) def early:"
+        r" a parent must be defined or imported before its child\.$"
+    )
+    with pytest.raises(FactoryError, match=message):
+
+        @factory(parent="later")
+        def early():
+            pass
+
+
+def test_a_zero_argument_model_function_is_named_as_a_possible_model():
+    def make_thing():
+        return {}
+
+    message = (
+        r"^@factory needs a model or a parent: write @factory\(User\), @factory\(dict\)"
+        r" or @factory\(parent=user\) above def make_thing\."
+        r" If make_thing is the model, it must take the attributes as keyword arguments\.$"
+    )
+    with pytest.raises(FactoryError, match=message):
+
+        @factory(make_thing)
+        def thing():
+            pass
+
+
 def test_an_old_style_body_shows_the_new_form():
     message = (
         r"^def user\(f\) takes no parameters: drop the parameter and import f"
