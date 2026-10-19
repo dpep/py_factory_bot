@@ -1,7 +1,7 @@
 import pytest
 from support.models import User
 
-from factory_bot import FactoryError, build, f, factory
+from factory_bot import FactoryError, build, build_list, f, factory
 
 
 def test_builds_the_model_from_static_attributes():
@@ -57,6 +57,43 @@ def test_mutable_values_are_not_shared_between_builds():
     first, second = build("user"), build("user")
     first.tags.append("x")
     assert second.tags == []
+
+
+def test_nested_containers_are_not_shared_between_builds():
+    @factory(dict)
+    def user():
+        f.settings = {"roles": [], "pair": ([],), "flags": {frozenset()}}
+
+    first, second = build("user"), build("user")
+    first["settings"]["roles"].append("admin")
+    first["settings"]["pair"][0].append("x")
+    assert second["settings"] == {"roles": [], "pair": ([],), "flags": {frozenset()}}
+
+
+def test_container_overrides_are_copied_per_build():
+    @factory(dict)
+    def user():
+        pass
+
+    first, second = build_list("user", 2, tags=[])
+    first["tags"].append("x")
+    assert second["tags"] == []
+
+
+def test_other_objects_are_shared_so_use_a_lambda_for_a_fresh_one():
+    class Client:
+        pass
+
+    client = Client()
+
+    @factory(dict)
+    def user():
+        f.client = client
+        f.fresh = lambda: Client()
+
+    first, second = build("user"), build("user")
+    assert first["client"] is second["client"] is client
+    assert first["fresh"] is not second["fresh"]
 
 
 def test_unknown_factory_suggests_the_closest_name():

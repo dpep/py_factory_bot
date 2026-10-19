@@ -16,6 +16,9 @@
 - `seed()` also forgets the values `fake.unique` has handed out, so the same seed gives the same data whatever ran before. Under the pytest plugin each test starts with a fresh unique pool, so a test no longer fails with `UniquenessException` depending on which tests ran first.
 - A second trait with the same name in one factory is an error naming where the first is defined; it used to replace the first silently. A child may still redefine its parent's trait.
 <!-- /lane -->
+<!-- lane: core-eval -->
+- Fix: each build gets its own copy of every list, dict, set and tuple, nested ones included, so `f.settings = {"roles": []}` no longer leaks between tests. Overrides are copied the same way, so the model holds a copy of a list you pass, not the list itself. Other objects are shared between builds: use a lambda for a fresh one.
+<!-- /lane -->
 
 ## 0.0.1 - 2026-10-18
 

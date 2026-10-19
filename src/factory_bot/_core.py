@@ -1,4 +1,3 @@
-import copy
 import difflib
 import inspect
 import itertools
@@ -163,7 +162,8 @@ class _Evaluator:
         self.strategy = strategy
         self.factory_name = factory_name
         self.definitions = definitions
-        self.values = dict(overrides)  # overrides are plain values, never called
+        # Overrides are plain values, never called.
+        self.values = {name: _fresh(v) for name, v in overrides.items()}
         self.resolving = []
 
     def attributes(self):
@@ -202,9 +202,7 @@ class _Evaluator:
             return self.associate(name, value)
         if callable(value):
             return self.call(name, value)
-        if isinstance(value, (list, dict, set)):
-            return copy.copy(value)
-        return value
+        return _fresh(value)
 
     def call(self, name, fn, *leading):
         deps = _dependencies(fn, skip=len(leading))
@@ -262,6 +260,19 @@ def _persist(fac, obj):
             " Give it a save() method, or set a hook with to_create(fn), at top level or inside the factory."
         )
     obj.save()
+
+
+def _fresh(value):
+    """Copy through builtin containers so builds never share them.
+
+    Other objects are used as-is: sessions, models and clients must not be cloned.
+    """
+    kind = type(value)  # exact: a subclass may not rebuild from an iterable
+    if kind is dict:
+        return {k: _fresh(v) for k, v in value.items()}
+    if kind in (list, set, tuple):
+        return kind(_fresh(v) for v in value)
+    return value
 
 
 def _dependencies(fn, skip=0):
