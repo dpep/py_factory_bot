@@ -5,6 +5,7 @@ import pytest
 from factory_bot import (
     FactoryError,
     build,
+    build_list,
     f,
     factory,
     reset_sequences,
@@ -126,6 +127,18 @@ def test_a_sequence_override_gets_dependencies_too():
         f.slug = "fixed"
 
     assert build("page", slug=sequence(lambda n, title: f"{title}{n}"))["slug"] == "Hi1"
+
+
+def test_a_sequence_made_during_a_build_works_as_a_whole_override():
+    @factory(dict)
+    def item():
+        f.sku = "x"
+
+    @factory(dict)
+    def order():
+        f.items = lambda: build_list(item, 3, sku=sequence(lambda n: f"S{n}"))
+
+    assert [i["sku"] for i in build(order)["items"]] == ["S1", "S2", "S3"]
 
 
 def test_a_missing_sequence_dependency_names_the_factory():

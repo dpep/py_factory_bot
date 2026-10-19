@@ -176,8 +176,13 @@ def test_reading_f_at_build_time_names_the_factory_and_the_fix():
 
 @pytest.mark.parametrize(
     "returns",
-    [lambda: sequence(lambda n: n), lambda: transient(1)],
-    ids=["sequence", "transient"],
+    [
+        lambda: sequence(lambda n: n),
+        lambda: transient(1),
+        lambda: [sequence(lambda n: n)],
+        lambda: {"k": (transient(1),)},
+    ],
+    ids=["sequence", "transient", "in a list", "in a dict's tuple"],
 )
 @pytest.mark.parametrize("strategy", [build, attributes_for])
 def test_a_marker_returned_by_a_function_is_an_error(returns, strategy):
@@ -188,7 +193,7 @@ def test_a_marker_returned_by_a_function_is_an_error(returns, strategy):
     with pytest.raises(FactoryError) as excinfo:
         strategy("user")
     assert re.fullmatch(
-        r"Factory 'user': <\w+ .+> was returned from a function, so it was never evaluated:"
+        r"Factory 'user': <\w+ .+> was never evaluated:"
         r" a sequence\(\), association\(\) or transient\(\) works only as an attribute's"
         r" whole value, never returned from a function or inside a container\.",
         str(excinfo.value),

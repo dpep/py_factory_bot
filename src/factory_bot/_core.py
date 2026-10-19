@@ -364,10 +364,8 @@ class _Evaluator:
         self.resolving.append(name)
         try:
             value = self.evaluate(name, self.plan.definitions[name])
-            if isinstance(value, _Marker):  # only a function's result can be one
-                raise FactoryError(
-                    f"{value!r} was returned from a function, so it was never evaluated: {_MARKER_RULE}"
-                )
+            if marker := _marker_in(value):
+                raise FactoryError(f"{marker!r} was never evaluated: {_MARKER_RULE}")
             self.values[name] = value
         except Exception as e:
             self.note(
@@ -592,22 +590,28 @@ def _persist(evaluator, obj):
     obj.save()
 
 
-def _fresh(value, container: type | None = None):
+def _fresh(value):
     """Copy through builtin containers so builds never share them.
 
     Other objects are used as-is: sessions, models and clients must not be cloned.
     """
     kind = type(value)  # exact: a subclass may not rebuild from an iterable
     if kind is dict:
-        return {k: _fresh(v, kind) for k, v in value.items()}
+        return {k: _fresh(v) for k, v in value.items()}
     if kind in (list, set, tuple):
-        return kind(_fresh(v, kind) for v in value)
-    # A whole value is never a marker here: evaluate takes those first.
-    if container and isinstance(value, _Marker):
-        raise FactoryError(
-            f"{value!r} is inside a {container.__name__}, so it was never evaluated: {_MARKER_RULE}"
-        )
+        return kind(_fresh(v) for v in value)
     return value
+
+
+def _marker_in(value):
+    """The first marker in value or the builtin containers in it, without copying anything."""
+    if isinstance(value, _Marker):
+        return value
+    kind = type(value)
+    items = (
+        value.values() if kind is dict else value if kind in (list, set, tuple) else ()
+    )
+    return next(filter(None, map(_marker_in, items)), None)
 
 
 def _is_lazy(value):

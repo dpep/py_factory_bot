@@ -142,19 +142,17 @@ def test_a_marker_inside_a_container_is_an_error():
         f.authors = [association("author")]
 
     rule = (
-        r", so it was never evaluated: a sequence\(\), association\(\) or transient\(\)"
+        r" was never evaluated: a sequence\(\), association\(\) or transient\(\)"
         r" works only as an attribute's whole value"
     )
     with pytest.raises(
         FactoryError,
-        match=rf"^Factory 'post': <association 'author'> is inside a list{rule}",
+        match=rf"^Factory 'post': <association 'author'>{rule}",
     ) as excinfo:
         build("post")
     assert excinfo.value.__notes__ == [
         "while building factory 'post', attribute 'authors'"
     ]
 
-    with pytest.raises(
-        FactoryError, match=rf"^Factory 'author': <transient 1> is inside a dict{rule}"
-    ):
+    with pytest.raises(FactoryError, match=rf"^Factory 'author': <transient 1>{rule}"):
         build("author", name={"first": transient(1)})
