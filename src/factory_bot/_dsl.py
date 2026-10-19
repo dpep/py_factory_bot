@@ -29,6 +29,7 @@ def factory(model: Callable[..., Any], /) -> Callable[[Body], Body]:
 
 
 def _define(body, model):
+    _check_body(body, "factory")
     name = body.__name__
     if model is not None and not callable(model):
         raise FactoryError(f"Factory {name!r}: model {model!r} is not callable")
@@ -46,6 +47,7 @@ def _define(body, model):
 
 def trait(body: Body) -> Body:
     """Declare a named set of attributes inside a factory, applied with build("user", "admin")."""
+    _check_body(body, "trait")
     owner = _current(f"@trait def {body.__name__}")
     definition = _Definition(body.__name__, None, body, kind="trait")
     _run_body(definition, body)
@@ -104,9 +106,19 @@ class _F:
 f = _F()
 
 
-def _run_body(definition, body):
+def _check_body(body, kind):
+    """A body is a plain def with no parameters: it runs once, now, and its name names it."""
+    if not inspect.isfunction(body) or body.__name__ == "<lambda>":
+        what = "a lambda" if inspect.isfunction(body) else repr(body)
+        raise FactoryError(
+            f"@{kind} takes a def, not {what}: the function's name names the {kind}"
+        )
     name = body.__name__
-    if inspect.isgeneratorfunction(body) or inspect.iscoroutinefunction(body):
+    if (
+        inspect.isgeneratorfunction(body)
+        or inspect.iscoroutinefunction(body)
+        or inspect.isasyncgenfunction(body)
+    ):
         raise FactoryError(
             f"def {name} must be a plain function: its body runs once, now"
         )
@@ -115,6 +127,9 @@ def _run_body(definition, body):
             f"def {name}({', '.join(params)}) takes no parameters: drop the parameter and import f"
             " (from factory_bot import f), and write @trait instead of @f.trait"
         )
+
+
+def _run_body(definition, body):
     token = _stack.set((*_stack.get(), definition))
     try:
         body()

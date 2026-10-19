@@ -1,3 +1,4 @@
+import functools
 import threading
 
 import pytest
@@ -79,6 +80,36 @@ def test_a_generator_body_is_rejected():
         @factory(dict)
         def user():
             yield
+
+
+def test_an_async_generator_body_is_rejected():
+    with pytest.raises(
+        FactoryError,
+        match=r"^def user must be a plain function: its body runs once, now$",
+    ):
+
+        @factory(dict)
+        async def user():
+            yield
+
+
+def test_a_lambda_body_is_rejected():
+    with pytest.raises(
+        FactoryError,
+        match=r"^@factory takes a def, not a lambda: the function's name names the factory$",
+    ):
+        factory(dict)(lambda: None)
+
+
+def test_a_body_that_is_not_a_function_is_rejected():
+    body = functools.partial(lambda: None)
+    with pytest.raises(
+        FactoryError, match=r"^@trait takes a def, not functools\.partial\("
+    ):
+
+        @factory(dict)
+        def user():
+            trait(body)
 
 
 def test_threads_defining_factories_at_once_do_not_cross_talk():
