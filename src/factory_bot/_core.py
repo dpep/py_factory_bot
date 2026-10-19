@@ -403,6 +403,11 @@ class _Evaluator:
             self.noted = e
 
     def call(self, name, fn, *leading):
+        if inspect.iscoroutinefunction(fn) or inspect.isasyncgenfunction(fn):
+            raise self.error(
+                f"{name!r} is an async def, so calling it gives a coroutine, not a value."
+                f" Use a plain def, or await it outside the build and pass the result.{_where(fn)}"
+            )
         positional, keyword = _dependencies(fn, len(leading))
         for dep in [*positional, *keyword]:
             if dep in self.plan.replaced:

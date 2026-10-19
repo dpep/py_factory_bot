@@ -37,6 +37,9 @@
 <!-- /lane -->
 - A `sequence`, `association` or `transient` passed as an override is evaluated, not passed to the model as a raw object.
 - A marker inside a container, or returned from a lambda, is an error naming the attribute, instead of reaching the model unevaluated.
+<!-- lane: sus2-core -->
+- An `async def` as an attribute, a sequence's function or a callback is an error, instead of handing the model an un-awaited coroutine.
+<!-- /lane -->
 - `seed()` also clears `fake.unique`, so the same seed gives the same data whatever ran before.
 - A lazy attribute's positional-only parameters are injected like the others.
 - Errors say where they happened. A `FactoryError` names the factory, the innermost when builds nest. An exception from a model, lambda or callback keeps its type and gains notes naming the factory and attribute with its file:line. A model's unknown-keyword `TypeError` suggests the attribute you probably meant.

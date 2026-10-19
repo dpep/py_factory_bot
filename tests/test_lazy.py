@@ -14,6 +14,7 @@ import pytest
 
 from factory_bot import (
     FactoryError,
+    after_build,
     attributes_for,
     build,
     f,
@@ -303,3 +304,60 @@ def test_a_callables_parameters_are_read_once_across_builds(monkeypatch):
     for _ in range(3):
         assert build("user") == {"first_name": "Ann", "email": "Ann@x.io", "stamp": 3}
     assert (read.count(email), read.count(stamp)) == (1, 3)
+
+
+async def _fetch():
+    return 1
+
+
+async def _stream():
+    yield 1
+
+
+async def _on_build(thing):
+    pass
+
+
+async def _counted(n):
+    return n
+
+
+def test_an_async_def_is_never_called():
+    @factory(dict)
+    def thing():
+        f.a = _fetch
+
+    with pytest.raises(FactoryError) as excinfo:
+        build("thing")
+    assert re.fullmatch(
+        r"Factory 'thing': 'a' is an async def, so calling it gives a coroutine, not a value\."
+        r" Use a plain def, or await it outside the build and pass the result\. \(test_lazy\.py:\d+\)",
+        str(excinfo.value),
+    )
+
+
+@pytest.mark.parametrize(
+    "declare",
+    [
+        lambda: setattr(f, "a", _stream),
+        lambda: setattr(f, "a", sequence(_counted)),
+        lambda: setattr(f, "a", transient(_fetch)) or setattr(f, "b", lambda a: a),
+        lambda: after_build(_on_build),
+    ],
+    ids=["async generator", "sequence", "transient", "callback"],
+)
+def test_no_async_def_is_called_whatever_declares_it(declare):
+    @factory(dict)
+    def thing():
+        declare()
+
+    with pytest.raises(FactoryError, match="is an async def"):
+        build("thing")
+
+
+def test_an_async_def_passed_at_build_time_is_stored():
+    @factory(dict)
+    def thing():
+        f.a = 1
+
+    assert build("thing", a=_fetch)["a"] is _fetch
