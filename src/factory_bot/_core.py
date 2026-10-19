@@ -163,7 +163,11 @@ def _register(definition):
     _registry.update(seen)
 
 
-class _Sequence:
+class _Marker:
+    """A declaration evaluated at build time, rather than a value used as given."""
+
+
+class _Sequence(_Marker):
     def __init__(self, fn):
         self.fn = fn
         self.reset()
@@ -176,12 +180,12 @@ class _Sequence:
         return self.fn(next(self.counter))
 
 
-class _Association:
+class _Association(_Marker):
     def __init__(self, name, traits, overrides):
         self.name, self.traits, self.overrides = name, traits, overrides
 
 
-class _Transient:
+class _Transient(_Marker):
     def __init__(self, value):
         self.value = value
 
@@ -191,9 +195,6 @@ class _Given:
 
     def __init__(self, value):
         self.value = value
-
-
-_Marker = (_Sequence, _Association, _Transient)
 
 
 class _Evaluator:
