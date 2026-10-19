@@ -35,7 +35,7 @@ def factory(model):
 
 
 def build(name, /, *traits, **overrides):
-    return _lookup(name).build(overrides)
+    return _lookup(name).build(traits, overrides)
 
 
 def sequence(fn):
@@ -64,10 +64,24 @@ class _Factory:
     def __init__(self, name, model, body):
         self.name, self.model, self.body = name, model, body
         self.attributes = {}
-        body(_Definition(self))
+        self.traits = {}
+        body(_Definition(self, self.attributes))
 
-    def build(self, overrides):
-        return self.model(**_Evaluator(self, overrides).attributes())
+    def build(self, traits, overrides):
+        return self.model(
+            **_Evaluator(self.name, self.definitions(traits), overrides).attributes()
+        )
+
+    def definitions(self, traits):
+        definitions = dict(self.attributes)
+        for trait in traits:
+            if trait not in self.traits:
+                raise FactoryError(
+                    f"Factory {self.name!r} has no trait {trait!r}.{_suggest(trait, self.traits)}"
+                    f" Traits: {', '.join(self.traits) or '(none)'}"
+                )
+            definitions |= self.traits[trait]
+        return definitions
 
 
 class _Sequence:
@@ -86,11 +100,19 @@ class _Sequence:
 class _Definition:
     """The `f` in `def user(f):`. Assigning to it declares an attribute."""
 
-    def __init__(self, factory):
+    def __init__(self, factory, attributes):
         object.__setattr__(self, "_factory", factory)
+        object.__setattr__(self, "_attributes", attributes)
 
     def __setattr__(self, name, value):
-        self._factory.attributes[name] = value
+        self._attributes[name] = value
+
+    def trait(self, body):
+        # Run the body now, once: re-running it per build would restart its sequences.
+        attributes = {}
+        body(_Definition(self._factory, attributes))
+        self._factory.traits[body.__name__] = attributes
+        return body
 
     def __getattr__(self, name):
         raise FactoryError(
@@ -102,28 +124,29 @@ class _Definition:
 class _Evaluator:
     """Resolves one build's attributes, each at most once, in dependency order."""
 
-    def __init__(self, factory, overrides):
-        self.factory = factory
+    def __init__(self, factory_name, definitions, overrides):
+        self.factory_name = factory_name
+        self.definitions = definitions
         self.values = dict(overrides)  # overrides are plain values, never called
         self.resolving = []
 
     def attributes(self):
-        names = (self.factory.attributes | self.values).keys()  # declaration order
+        names = (self.definitions | self.values).keys()  # declaration order
         return {name: self.get(name) for name in names}
 
     def get(self, name, needed_by=None):
         if name in self.values:
             return self.values[name]
-        definitions = self.factory.attributes
+        definitions = self.definitions
         if name not in definitions:
             raise FactoryError(
-                f"Factory {self.factory.name!r}: {needed_by!r} depends on {name!r}, which is not defined."
+                f"Factory {self.factory_name!r}: {needed_by!r} depends on {name!r}, which is not defined."
                 f"{_suggest(name, definitions)}{_where(definitions[needed_by])}"
             )
         if name in self.resolving:
             cycle = " -> ".join([*self.resolving[self.resolving.index(name) :], name])
             raise FactoryError(
-                f"Factory {self.factory.name!r}: circular dependency: {cycle}"
+                f"Factory {self.factory_name!r}: circular dependency: {cycle}"
             )
         self.resolving.append(name)
         try:
