@@ -1,6 +1,6 @@
 from support.models import User
 
-from factory_bot import attributes_for, f, factory, sequence, trait
+from factory_bot import association, attributes_for, f, factory, sequence, trait
 
 
 def test_attributes_for_returns_the_resolved_attributes_without_building():
@@ -21,3 +21,16 @@ def test_attributes_for_returns_the_resolved_attributes_without_building():
         "username": "user1",
         "admin": True,
     }
+
+
+def test_attributes_for_keeps_an_override_of_an_association():
+    @factory(User)
+    def user():
+        pass
+
+    @factory(dict)
+    def post():
+        f.title = "Hi"
+        f.author = association("user")
+
+    assert attributes_for("post", author=7) == {"title": "Hi", "author": 7}

@@ -88,3 +88,11 @@ def test_containers_in_association_overrides_are_not_shared_between_builds():
     first, second = build("post"), build("post")
     first.author.tags.append("x")
     assert second.author.tags == []
+
+
+def test_an_association_passed_as_an_override_follows_the_strategy(post_factory):
+    built = build("post", author=association("user", "admin"))
+    assert built.author == User(first_name="Ann", admin=True)
+    assert not built.author.saved
+    assert create("post", author=association("user")).author.saved
+    assert attributes_for("post", author=association("user")) == {"title": "Hello"}

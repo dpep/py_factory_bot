@@ -155,28 +155,38 @@ class _Transient:
         self.value = value
 
 
+class _Given:
+    """An override's plain value: used as given, even when callable."""
+
+    def __init__(self, value):
+        self.value = value
+
+
+_Marker = (_Sequence, _Association, _Transient)
+
+
 class _Evaluator:
     """Resolves one build's attributes, each at most once, in dependency order."""
 
     def __init__(self, strategy, factory_name, layers, overrides):
         self.strategy = strategy
         self.factory_name = factory_name
-        self.definitions = {
-            n: v for layer in layers for n, v in layer.attributes.items()
+        # Overrides are the last layer. A marker in one evaluates like a definition;
+        # anything else is a plain value, never called.
+        given = {
+            n: v if isinstance(v, _Marker) else _Given(v) for n, v in overrides.items()
         }
+        layers = [*(layer.attributes for layer in layers), given]
+        self.definitions = {n: v for layer in layers for n, v in layer.items()}
         # Transient in any layer stays transient, whatever a later layer assigns.
         self.transients = {
-            n
-            for layer in layers
-            for n, v in layer.attributes.items()
-            if isinstance(v, _Transient)
+            n for layer in layers for n, v in layer.items() if isinstance(v, _Transient)
         }
-        # Overrides are plain values, never called.
-        self.values = {name: _fresh(v) for name, v in overrides.items()}
+        self.values = {}
         self.resolving = []
 
     def attributes(self):
-        names = (self.definitions | self.values).keys()  # declaration order
+        names = self.definitions.keys()  # declaration order
         return {name: self.get(name) for name in names if self.exposes(name)}
 
     def exposes(self, name):
@@ -203,6 +213,8 @@ class _Evaluator:
         return self.values[name]
 
     def evaluate(self, name, value):
+        if isinstance(value, _Given):
+            return _fresh(value.value)
         if isinstance(value, _Transient):
             return self.evaluate(name, value.value)
         if isinstance(value, _Sequence):
@@ -216,7 +228,7 @@ class _Evaluator:
     def call(self, name, fn, *leading):
         deps = _dependencies(fn, skip=len(leading))
         for dep in deps:
-            if dep not in self.values and dep not in self.definitions:
+            if dep not in self.definitions:
                 raise FactoryError(
                     f"Factory {self.factory_name!r}: {name!r} depends on {dep!r}, which is not defined."
                     f"{_suggest(dep, self.definitions)}{_where(fn)}"

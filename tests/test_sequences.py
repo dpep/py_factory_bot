@@ -46,3 +46,15 @@ def test_a_sequence_needs_a_function_of_the_counter():
         match=r"sequence\(\) takes a function of the counter, e\.g\. sequence\(lambda n:",
     ):
         sequence("user")
+
+
+def test_a_sequence_passed_as_an_override_gives_its_next_value():
+    @factory(dict)
+    def user():
+        f.username = "ann"
+
+    seq = sequence(lambda n: f"user{n}")
+    assert [build("user", username=seq)["username"] for _ in range(2)] == [
+        "user1",
+        "user2",
+    ]
