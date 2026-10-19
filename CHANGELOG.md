@@ -28,6 +28,7 @@
 <!-- lane: r2-core -->
 - `@factory(User)` returns the factory itself, a `Factory[User]`. Pass it wherever a factory's name goes, `build(user)` or `association(user)`, and a type checker knows the result is a `User`; a name still works and gives `Any`. Nothing to change: calling the old return value never worked.
 - Breaking: a class assigned as a value is stored, not called on each build, so `f.status = Status` gives the `Enum` class and `f.kind = Decimal` gives `Decimal`. If you relied on a class being instantiated per build, write `lambda: SomeClass()`. Other callables are still called.
+- `lint(*factories, strategy="build", traits=True)` builds every factory (or those given) once, then once with each of its traits, inherited ones included, and raises one `FactoryError` listing every call that failed, as a call you can paste into a test; the original exceptions are chained as an `ExceptionGroup`. Its builds are real: they use up sequence numbers and `fake.unique` values, and `strategy="create"` saves rows, so run it inside a test.
 <!-- /lane -->
 
 ## 0.0.1 - 2026-10-18

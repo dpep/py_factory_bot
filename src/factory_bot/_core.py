@@ -7,7 +7,7 @@ import weakref
 from collections.abc import Callable
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar, overload
+from typing import Any, Generic, Literal, TypeVar, overload
 
 _registry: dict[str, "_Definition"] = {}
 _sequences: weakref.WeakSet["_Sequence"] = weakref.WeakSet()
@@ -99,6 +99,43 @@ def create_list(
 ) -> list[T]: ...
 def create_list(factory: Any, count: int, /, *traits: str, **overrides: Any) -> Any:
     return [create(factory, *traits, **overrides) for _ in range(count)]
+
+
+def lint(
+    *factories: str | Factory[Any],
+    strategy: Literal["build", "create"] = "build",
+    traits: bool = True,
+) -> None:
+    """Build every factory (or those given) once, then once with each trait; raise one error listing every failure.
+
+    Its builds are real ones: they use up sequence numbers and fake.unique values, and
+    strategy="create" saves rows, so run it inside a test, whose transaction cleans up.
+    """
+    if strategy not in ("build", "create"):
+        raise FactoryError(
+            f"lint() takes strategy='build' or 'create', not {strategy!r}"
+        )
+    definitions = [_lookup(_name_of(fac)) for fac in factories] or list(
+        _registry.values()
+    )
+    calls = [
+        (d.name, case)
+        for d in definitions
+        for case in [(), *((t,) for t in d.visible_traits() if traits)]
+    ]
+    failures = []
+    for name, case in calls:
+        try:
+            _run(strategy, name, case, {})
+        except Exception as e:  # noqa: BLE001  # reporting every failure is the point
+            call = f"{strategy}({', '.join(map(repr, (name, *case)))})"
+            e.add_note(f"factory_bot.lint: {call}")
+            failures.append((call, e))
+    if failures:
+        lines = "".join(f"\n  {call}: {type(e).__name__}: {e}" for call, e in failures)
+        raise FactoryError(
+            f"lint: {len(failures)} of {len(calls)} builds failed:{lines}"
+        ) from ExceptionGroup("lint failures", [e for _, e in failures])
 
 
 def _set_to_create(fn):
