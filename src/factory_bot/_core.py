@@ -46,11 +46,7 @@ class _Factory:
         body(_Definition(self))
 
     def build(self, overrides):
-        return self.model(**self.attributes_for(overrides))
-
-    def attributes_for(self, overrides):
-        values = {name: _evaluate(value) for name, value in self.attributes.items()}
-        return values | overrides
+        return self.model(**_Evaluator(self, overrides).attributes())
 
 
 class _Definition:
@@ -62,11 +58,64 @@ class _Definition:
     def __setattr__(self, name, value):
         self._factory.attributes[name] = value
 
+    def __getattr__(self, name):
+        raise FactoryError(
+            f"Factory {self._factory.name!r}: can't read f.{name} in a definition."
+            f" To use another attribute, take it as a parameter: lambda {name}: ..."
+        )
 
-def _evaluate(value):
-    if isinstance(value, (list, dict, set)):
-        return copy.copy(value)
-    return value
+
+class _Evaluator:
+    """Resolves one build's attributes, each at most once, in dependency order."""
+
+    def __init__(self, factory, overrides):
+        self.factory = factory
+        self.values = dict(overrides)  # overrides are plain values, never called
+        self.resolving = []
+
+    def attributes(self):
+        names = (self.factory.attributes | self.values).keys()  # declaration order
+        return {name: self.get(name) for name in names}
+
+    def get(self, name, needed_by=None):
+        if name in self.values:
+            return self.values[name]
+        definitions = self.factory.attributes
+        if name not in definitions:
+            raise FactoryError(
+                f"Factory {self.factory.name!r}: {needed_by!r} depends on {name!r}, which is not defined."
+                f"{_suggest(name, definitions)}{_where(definitions[needed_by])}"
+            )
+        if name in self.resolving:
+            cycle = " -> ".join([*self.resolving[self.resolving.index(name) :], name])
+            raise FactoryError(
+                f"Factory {self.factory.name!r}: circular dependency: {cycle}"
+            )
+        self.resolving.append(name)
+        try:
+            self.values[name] = self.evaluate(name, definitions[name])
+        finally:
+            self.resolving.pop()
+        return self.values[name]
+
+    def evaluate(self, name, value):
+        if callable(value):
+            return value(
+                **{dep: self.get(dep, needed_by=name) for dep in _dependencies(value)}
+            )
+        if isinstance(value, (list, dict, set)):
+            return copy.copy(value)
+        return value
+
+
+def _dependencies(fn):
+    # Only required params: fake.paragraph(nb_sentences=3) must not be injected.
+    try:
+        params = inspect.signature(fn).parameters.values()
+    except (TypeError, ValueError):  # some builtins (dict, str) have no signature
+        return []
+    keyword = (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+    return [p.name for p in params if p.kind in keyword and p.default is p.empty]
 
 
 def _lookup(name):
