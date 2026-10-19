@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 bin=.venv/bin
 [ -x "$bin/pytest" ] || bin=$(dirname "$(command -v python)")
 
-"$bin/pytest" -q "$@"
+"$bin/coverage" run -m pytest -q "$@"
+"$bin/coverage" report
 "$bin/ruff" check .
 "$bin/ruff" format --check .
