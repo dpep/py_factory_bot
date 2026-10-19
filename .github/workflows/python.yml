@@ -3,39 +3,51 @@ name: Python
 on:
   push:
     branches: [ main ]
-    tags: '*'
+    tags: [ '*' ]
   pull_request:
     types: [ opened, synchronize ]
 
 jobs:
   test:
+    name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ '3.11', '3.12', '3.13', '3.14', '3.15' ]
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Python setup
-      uses: actions/setup-python@v5
+    - uses: actions/checkout@v7
+    - uses: actions/setup-python@v6
       with:
-        python-version: 3.x
+        python-version: ${{ matrix.python-version }}
         cache: pip
     - name: install dependencies
-      run: pip install -e .[test]
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e . --group dev
     - run: script/check.sh
 
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/factory_bot
+    permissions:
+      id-token: write  # trusted publishing
 
-    # build and publish
+    steps:
+    - uses: actions/checkout@v7
+    - uses: actions/setup-python@v6
+      with:
+        python-version: 3.x
     - name: build package
-      if: startsWith(github.ref, 'refs/tags/')  # tags pushed
       run: |
         pip install build
-        python -m build  # build wheel and source tarball
-    - name: publish
-      if: startsWith(github.ref, 'refs/tags/')  # tags pushed
-      uses: pypa/gh-action-pypi-publish@release/v1
-      env:
-        url: https://pypi.org/p/factory_bot
-
+        python -m build
+    - uses: pypa/gh-action-pypi-publish@release/v1
 
 permissions:
-  id-token: write
   contents: read

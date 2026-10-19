@@ -1,26 +1,39 @@
 [build-system]
-requires = ["setuptools >= 61"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling >= 1.27"]
+build-backend = "hatchling.build"
 
 [project]
 name = "factory_bot"
-authors = [{name = "Daniel Pepper"}]
 dynamic = ["version"]
 description = "Test data factories with the ergonomics of Ruby's factory_bot"
 readme = "README.md"
-license = {file = "LICENSE.txt"}
-classifiers = [
-  # https://pypi.python.org/pypi?%3Aaction=list_classifiers
-  "License :: OSI Approved :: MIT License",
-]
-requires-python = ">= 3.10"
+license = "MIT"
+license-files = ["LICENSE.txt"]
+authors = [{ name = "Daniel Pepper" }]
+requires-python = ">= 3.11"
 dependencies = []
+keywords = ["testing", "factories", "fixtures", "factory_bot"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Framework :: Pytest",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Testing",
+  "Typing :: Typed",
+]
 
 [project.optional-dependencies]
 faker = ["faker"]
 django = ["django"]
 sqlalchemy = ["sqlalchemy >= 2"]
-test = [
+
+[project.urls]
+Homepage = "https://github.com/dpep/py_factory_bot"
+Issues = "https://github.com/dpep/py_factory_bot/issues"
+Changelog = "https://github.com/dpep/py_factory_bot/blob/main/CHANGELOG.md"
+
+[dependency-groups]
+dev = [
   "pytest >= 8.2",
   "ruff",
   "faker",
@@ -28,17 +41,20 @@ test = [
   "sqlalchemy >= 2",
 ]
 
-[project.urls]
-Homepage = "https://github.com/dpep/py_factory_bot"
+[tool.hatch.version]
+path = "src/factory_bot/__init__.py"
 
-[tool.setuptools]
-packages = ["factory_bot"]
-
-[tool.setuptools.dynamic]
-version = {attr = "factory_bot.__version__"}
+# Allowlist so untracked local files never ship.
+[tool.hatch.build.targets.sdist]
+only-include = ["src", "tests", "CHANGELOG.md", "LICENSE.txt", "README.md", "pyproject.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = ["--import-mode=importlib", "--strict-markers"]
+xfail_strict = true
+
+[tool.ruff]
+target-version = "py311"
 
 [tool.ruff.lint]
-extend-select = ["I"]
+extend-select = ["I", "UP", "B"]
