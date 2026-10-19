@@ -2,6 +2,7 @@ import inspect
 
 import pytest
 from faker import Faker
+from faker.providers import BaseProvider
 
 from factory_bot import FactoryError, after_build, build, f, factory, fake, seed, trait
 from factory_bot._fake import _Fake
@@ -120,3 +121,21 @@ def test_a_multi_locale_fake_still_proxies_and_guards():
         @factory(dict)
         def user():
             f.name = multi.first_name()
+
+
+def test_generator_helpers_and_unique_settings_are_not_provider_calls():
+    class Shop(BaseProvider):
+        def sku(self):
+            return "SKU-1"
+
+    local = _Fake()
+
+    @factory(dict)
+    def item():
+        local.add_provider(Shop)
+        f.sku = local.sku
+        f.flag = local.unique.exclude_types([bool]).pybool
+
+    item_ = build("item")
+    assert item_["sku"] == "SKU-1"
+    assert isinstance(item_["flag"], bool)
