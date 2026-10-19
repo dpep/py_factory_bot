@@ -383,6 +383,30 @@ def test_a_session_fixture_set_up_after_an_autouse_hook_does_not_restore_it(
     assert names(result)["test_session_end"] == "at_import"
 
 
+PARAMS = """
+import pytest
+from factory_bot import fake
+
+@pytest.fixture(scope="module", params=["a", "b"])
+def shared(request):
+    return fake.name()
+
+def test_p(shared, request):
+    print(f"test_p_{request.node.callspec.id}={shared}")
+"""
+
+
+def test_each_param_of_a_module_fixture_gets_its_own_data(pytester):
+    # Seeded from pytest's param index (SubRequest.param_index, undocumented): if pytest
+    # drops it, every param gets the same data again and this fails.
+    pytester.makepyfile(test_params=PARAMS)
+    data = names(run(pytester))
+    assert data.keys() == {"test_p_a", "test_p_b"}
+    assert data["test_p_a"] != data["test_p_b"]
+    alone = names(run(pytester, "test_params.py::test_p[b]"))
+    assert alone["test_p_b"] == data["test_p_b"]
+
+
 # A fixture's seed() is the fixture's own change: the plugin's restore must not undo it.
 
 SEEDED = """

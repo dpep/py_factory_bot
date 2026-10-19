@@ -47,9 +47,13 @@ def pytest_fixture_setup(fixturedef, request):
     # Registered before setup so it runs after the fixture's own teardown (finalizers are LIFO).
     request.addfinalizer(restore_hook)
     state, generation = fake.random.getstate(), _fake._generation
-    fake.seed_instance(
-        f"{_seed(request.config)}:{request.node.nodeid}::{fixturedef.argname}"
-    )
+    key = f"{_seed(request.config)}:{request.node.nodeid}::{fixturedef.argname}"
+    if hasattr(request, "param"):
+        # A module fixture's node is the same for every param. param_index is undocumented
+        # (request.param's repr can hold an address); a test pins it, and losing it here
+        # only costs distinct data per param.
+        key += f"[{getattr(request, 'param_index', 0)}]"
+    fake.seed_instance(key)
     try:
         return (yield)
     finally:
