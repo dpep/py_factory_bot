@@ -99,13 +99,15 @@ def test_persist_with_a_callable_session_treats_it_as_a_session():
     assert session.calls == [("add", point_), ("flush",)]
 
 
-def test_persist_with_anything_else_lists_what_it_takes():
+# A set has add() but no flush(): it is neither a session nor a function.
+@pytest.mark.parametrize("hook, shown", [("users", "'users'"), (set(), r"set\(\)")])
+def test_persist_with_anything_else_lists_what_it_takes(hook, shown):
     message = (
         r"^persist_with\(\) takes a function, a SQLAlchemy session, or None to restore obj\.save\(\);"
-        r" got 'users'\.$"
+        rf" got {shown}\.$"
     )
     with pytest.raises(FactoryError, match=message):
-        persist_with("users")
+        persist_with(hook)
 
 
 def test_persist_with_inside_a_body_points_at_the_global_hook():

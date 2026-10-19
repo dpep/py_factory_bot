@@ -21,6 +21,14 @@ def test_a_sequence_counts_up_from_one_per_build():
     assert [build("user")["username"] for _ in range(3)] == ["user1", "user2", "user3"]
 
 
+def test_a_builtin_without_a_signature_is_trusted_to_take_the_counter():
+    @factory(dict)
+    def user():
+        f.code = sequence(str)
+
+    assert [build("user")["code"] for _ in range(2)] == ["1", "2"]
+
+
 def test_each_sequence_keeps_its_own_count():
     @factory(dict)
     def user():
