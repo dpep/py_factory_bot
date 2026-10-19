@@ -11,21 +11,17 @@
 - `@after_build` / `@after_create` callbacks get the instance first and other attributes, transients included, by parameter name. They run in definition order: parent, child, then traits.
 - `@to_create` inside a factory body sets that factory's persistence hook, and children inherit it. At top level `to_create(fn)` is still the global hook.
 - SQLAlchemy: `factory_bot.to_create(persist_with(session))` adds and flushes each created object without committing, so the test's transaction still decides. Takes a `Session` or `scoped_session`.
-- pytest plugin, on by default: `fake` is reseeded before each test from the test's node id, so its data is the same alone, in the suite or in any order; with pytest-randomly, `--randomly-seed` drives it. Set `factory_bot_reset_sequences = true` to restart sequences per test. Disable with `-p no:factory_bot`.
-<!-- lane: dsl -->
+- pytest plugin, on by default: `fake` is reseeded before each test from the test's node id, so its data is the same alone, in the suite or in any order (a module- or session-scoped fixture's data is not: it takes the seed of the first test that uses it); with pytest-randomly, `--randomly-seed` drives it. Set `factory_bot_reset_sequences = true` to restart sequences per test. Disable with `-p no:factory_bot`.
 - `seed()` also forgets the values `fake.unique` has handed out, so the same seed gives the same data whatever ran before. Under the pytest plugin each test starts with a fresh unique pool, so a test no longer fails with `UniquenessException` depending on which tests ran first.
 - A second trait with the same name in one factory is an error naming where the first is defined; it used to replace the first silently. A child may still redefine its parent's trait.
-<!-- /lane -->
-<!-- lane: core-eval -->
 - Fix: each build gets its own copy of every list, dict, set and tuple, nested ones included, so `f.settings = {"roles": []}` no longer leaks between tests. Overrides are copied the same way, so the model holds a copy of a list you pass, not the list itself. Other objects are shared between builds: use a lambda for a fresh one.
 - Fix: a `sequence(...)` passed as an override gives its next value instead of reaching the model as a raw object.
 - Fix: a `sequence(...)` or `transient(...)` returned from a lazy attribute, as in `f.code = lambda: sequence(...)`, is an error naming the attribute, instead of reaching the model as a raw object. Assign the marker itself: `f.code = sequence(...)`. So is a marker inside a list, dict, set or tuple, as in `f.authors = [association("author")]`; for a list of associations, build it in a lambda: `lambda: [association("author")]`.
 - Fix: a lazy attribute's positional-only parameters (`lambda name, /: ...`) are injected like the others.
 - An exception from a model or a lazy attribute keeps its type and gains a note naming the factory, plus the attribute and its file:line. A model's unknown-keyword `TypeError` also suggests the factory attribute you probably meant.
 - A `FactoryError` raised while a factory's body runs or while it builds names that factory, the innermost one when builds nest. `f.book = lambda: build("nope")` now says `Factory 'shelf': No factory named 'nope'.` Like other exceptions, it also gains a note from each build it passes through, so a failure deep in an association shows the attributes that led to it.
-- `build(...)` or `attributes_for(...)` called directly in a factory body is now an error: it ran once at definition time, so every build shared one object. Use `association("user")`, which builds or creates to match the parent, or wrap it in a lambda (`f.author = lambda: build("user")`).
+- `build(...)`, `create(...)` or `attributes_for(...)` called directly in a factory body is now an error: it ran once at definition time, so every build shared one object. Use `association("user")`, which builds or creates to match the parent, or wrap it in a lambda (`f.author = lambda: build("user")`).
 - "Factory 'user' is already defined" shows the first definition's full path, and points at `clear_factories()` for redefining in a REPL or after a reload.
-<!-- /lane -->
 
 ## 0.0.1 - 2026-10-18
 

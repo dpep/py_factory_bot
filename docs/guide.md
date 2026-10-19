@@ -257,7 +257,7 @@ Factories are global, so define them at module level, not inside tests or fixtur
 
 What the pytest plugin resets before each test, and what it leaves to you:
 
-- **`fake` is reseeded** from the run's seed and the test's id, so a test's fake data doesn't depend on which tests ran before it. With pytest-randomly installed, each run picks a new seed; rerun with `--randomly-seed=N` (the header shows `N`) to get the same data back.
+- **`fake` is reseeded** from the run's seed and the test's id, so a test's fake data doesn't depend on which tests ran before it. With pytest-randomly installed, each run picks a new seed; rerun with `--randomly-seed=N` (the header shows `N`) to get the same data back. That holds per test: a module- or session-scoped fixture is set up once, under the seed of the first test that uses it, so its data can change with which tests run and in what order.
 - **Sequences keep counting** across tests, so `user1` when a test runs alone can be `user7` in the suite. That's the default because restarting them breaks suites that keep rows between tests: two tests that both create `user1` collide on a unique column. If every test rolls back, as with Django's `TestCase` or the SQLAlchemy recipe below, restart them per test:
 
   ```toml
