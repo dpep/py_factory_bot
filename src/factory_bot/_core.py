@@ -238,14 +238,15 @@ class _Evaluator:
         return _fresh(value)
 
     def call(self, name, fn, *leading):
-        deps = _dependencies(fn, skip=len(leading))
-        for dep in deps:
+        positional, keyword = _dependencies(fn, skip=len(leading))
+        for dep in [*positional, *keyword]:
             if dep not in self.definitions:
                 raise FactoryError(
                     f"Factory {self.factory_name!r}: {name!r} depends on {dep!r}, which is not defined."
                     f"{_suggest(dep, self.definitions)}{_where(fn)}"
                 )
-        return fn(*leading, **{dep: self.get(dep) for dep in deps})
+        args = [self.get(dep) for dep in positional]
+        return fn(*leading, *args, **{dep: self.get(dep) for dep in keyword})
 
     def associate(self, assoc, name=None):
         name = name or (self.resolving[-1] if self.resolving else None)
@@ -332,13 +333,18 @@ def _fresh(value):
 
 
 def _dependencies(fn, skip=0):
+    """Names of fn's required parameters: (positional-only, the rest)."""
     # Only required params: fake.paragraph(nb_sentences=3) must not be injected.
     try:
         params = list(inspect.signature(fn).parameters.values())[skip:]
     except (TypeError, ValueError):  # some builtins (dict, str) have no signature
-        return []
+        return [], []
+    required = [p for p in params if p.default is p.empty]
     keyword = (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
-    return [p.name for p in params if p.kind in keyword and p.default is p.empty]
+    return (
+        [p.name for p in required if p.kind is inspect.Parameter.POSITIONAL_ONLY],
+        [p.name for p in required if p.kind in keyword],
+    )
 
 
 def _lookup(name):

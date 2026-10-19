@@ -104,3 +104,13 @@ def test_reading_an_attribute_in_a_definition_points_to_injection():
         def user():
             f.first_name = "Ann"
             f.email = f.first_name + "@example.com"
+
+
+def test_positional_only_parameters_are_injected_by_name_too():
+    @factory(dict)
+    def user():
+        f.first_name = "Ann"
+        f.last_name = "Lee"
+        f.email = lambda first_name, /, last_name: f"{first_name}.{last_name}"
+
+    assert build("user")["email"] == "Ann.Lee"
