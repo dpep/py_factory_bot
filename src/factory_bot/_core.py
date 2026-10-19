@@ -138,7 +138,8 @@ def _register(definition):
         existing = _registry.get(d.name) or seen.get(d.name)
         if existing:
             raise FactoryError(
-                f"Factory {d.name!r} is already defined{_where(existing.body)}"
+                f"Factory {d.name!r} is already defined{_where(existing.body, full=True)}."
+                " To redefine it, e.g. in a REPL or after a reload, call clear_factories() first."
             )
         seen[d.name] = d
     _registry.update(seen)
@@ -422,8 +423,9 @@ def _suggest(name, options):
     return f" Did you mean {close[0]!r}?" if close else ""
 
 
-def _where(fn):
+def _where(fn, full=False):
     code = getattr(fn, "__code__", None)
-    return (
-        f" ({os.path.basename(code.co_filename)}:{code.co_firstlineno})" if code else ""
-    )
+    if not code:
+        return ""
+    path = code.co_filename if full else os.path.basename(code.co_filename)
+    return f" ({path}:{code.co_firstlineno})"

@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from support.models import User
 
@@ -134,7 +136,8 @@ def test_duplicate_factory_names_are_rejected():
 
     with pytest.raises(
         FactoryError,
-        match=r"^Factory 'user' is already defined \(test_build\.py:\d+\)$",
+        match=rf"^Factory 'user' is already defined \({re.escape(__file__)}:\d+\)\."
+        r" To redefine it, e\.g\. in a REPL or after a reload, call clear_factories\(\) first\.$",
     ):
 
         @factory(User)
