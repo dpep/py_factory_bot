@@ -71,6 +71,23 @@ def test_an_old_style_body_shows_the_new_form():
             pass
 
 
+def test_an_old_style_bare_factory_shows_the_new_form():
+    message = r"^def guest\(f\) takes no parameters: drop the parameter and import f"
+    with pytest.raises(FactoryError, match=message):
+
+        @factory(dict)
+        def user():
+            @factory
+            def guest(f):
+                pass
+
+    with pytest.raises(FactoryError, match=r"^def admin\(f\) takes no parameters"):
+
+        @factory
+        def admin(f):
+            pass
+
+
 def test_a_generator_body_is_rejected():
     with pytest.raises(
         FactoryError,

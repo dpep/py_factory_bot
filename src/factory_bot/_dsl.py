@@ -19,6 +19,7 @@ _stack: ContextVar[tuple[_Definition, ...]] = ContextVar(
 def factory(model: Callable[..., Any], /) -> Callable[[Body], Body]:
     """@factory(User) registers a factory; nested in one, bare @factory declares a child."""
     if _is_body(model):
+        _check_body(model, "factory")
         if not _stack.get():
             raise FactoryError(
                 f"@factory needs a model: write @factory(User) or @factory(dict) above def {model.__name__}"
@@ -154,8 +155,16 @@ def _factory_name(stack):
 
 
 def _is_body(obj):
-    # A model must accept kwargs, so a zero-argument function can only be a body.
-    return inspect.isfunction(obj) and not inspect.signature(obj).parameters
+    # A model must accept kwargs, so a zero-argument function can only be a body. One
+    # required positional parameter is the pre-0.0.2 `def user(f)` body, as 0.0.1 read it.
+    if not inspect.isfunction(obj):
+        return False
+    params = list(inspect.signature(obj).parameters.values())
+    return not params or (
+        len(params) == 1
+        and params[0].kind is params[0].POSITIONAL_OR_KEYWORD
+        and params[0].default is params[0].empty
+    )
 
 
 def _callback(kind: str) -> Callable[[Fn], Fn]:
