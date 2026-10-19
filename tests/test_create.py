@@ -100,7 +100,7 @@ def test_create_while_a_factory_is_being_defined_is_an_error():
 
     message = (
         r"^Factory 'post': create\('user'\) ran while a factory was being defined, so it would run once, at import\."
-        r" Make it lazy: lambda: create\('user'\), or use association\('user'\)$"
+        r" Use association\('user'\), which builds or creates to match the parent, or make it lazy: lambda: create\('user'\)$"
     )
     with pytest.raises(FactoryError, match=message):
 

@@ -365,7 +365,7 @@ def _run(strategy, name, traits, overrides, via=None):
     if _defining_factory() is not None:
         raise FactoryError(
             f"{strategy}({name!r}) ran while a factory was being defined, so it would run once, at import."
-            f" Make it lazy: lambda: {strategy}({name!r}), or use association({name!r})",
+            f" Use association({name!r}), which builds or creates to match the parent, or make it lazy: lambda: {strategy}({name!r})"
         )
     # Outside the frame below: an unknown factory or trait is the caller's mistake.
     plan = _lookup(name).resolve(traits, overrides)
