@@ -382,8 +382,7 @@ class _Evaluator:
             return self.call(name, value.fn, next(value.counter))
         if isinstance(value, _Association):
             return self.associate(value, name)
-        # A class is stored, not called: f.status = Status means the Enum itself.
-        if callable(value) and not isinstance(value, type):
+        if _is_lazy(value):
             return self.call(name, value)
         return _fresh(value)
 
@@ -399,7 +398,7 @@ class _Evaluator:
             self.noted = e
 
     def call(self, name, fn, *leading):
-        positional, keyword = _dependencies(fn, skip=len(leading))
+        positional, keyword = _dependencies(fn, len(leading))
         for dep in [*positional, *keyword]:
             if dep in self.plan.replaced:
                 raise self.error(
@@ -606,6 +605,12 @@ def _fresh(value, container: type | None = None):
     return value
 
 
+def _is_lazy(value):
+    """Whether a value written in a body is called per build, rather than stored."""
+    # A class is stored, not called: f.status = Status means the Enum itself.
+    return callable(value) and not isinstance(value, type)
+
+
 def _source(value):
     """The function behind a definition, to point at its line."""
     if isinstance(value, _Transient):
@@ -619,7 +624,7 @@ _dependency_cache: weakref.WeakKeyDictionary[Any, dict[int, Any]] = (
 )
 
 
-def _dependencies(fn, skip=0):
+def _dependencies(fn, skip):
     """Names of fn's required parameters: (positional-only, the rest)."""
     try:
         by_skip = _dependency_cache.setdefault(fn, {})

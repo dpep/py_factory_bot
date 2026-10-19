@@ -34,11 +34,6 @@ def factory(
 def factory(model: Any, /) -> Any:
     """@factory(User) registers a factory; nested in one, bare @factory declares a child."""
     if _is_body(model):
-        _check_body(model, "factory")
-        if not _stack.get():
-            raise FactoryError(
-                f"@factory needs a model: write @factory(User) or @factory(dict) above def {model.__name__}"
-            )
         return _define(model, None)
     return lambda body: _define(body, model)
 
@@ -46,6 +41,10 @@ def factory(model: Any, /) -> Any:
 def _define(body, model):
     _check_body(body, "factory")
     name = body.__name__
+    if model is None and not _stack.get():
+        raise FactoryError(
+            f"@factory needs a model: write @factory(User) or @factory(dict) above def {name}"
+        )
     if model is not None and not callable(model):
         raise FactoryError(f"model {model!r} is not callable", factory=name)
     parent = _current(f"@factory def {name}") if _stack.get() else None

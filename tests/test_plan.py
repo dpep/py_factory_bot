@@ -15,7 +15,7 @@ from factory_bot import (
     trait,
     transient,
 )
-from factory_bot._core import _Given, _registry, _Sequence, _Transient
+from factory_bot._core import _Given, _is_lazy, _registry, _Sequence, _Transient
 
 
 @dataclass
@@ -82,7 +82,7 @@ def kind(value):
         return f"transient {kind(value.value)}"
     if isinstance(value, _Sequence):
         return "sequence"
-    if callable(value) and not isinstance(value, type):
+    if _is_lazy(value):
         return "lazy"
     return repr(value)
 
