@@ -1,5 +1,6 @@
 import inspect
 import random
+import re
 
 import pytest
 from faker import Faker
@@ -104,9 +105,12 @@ def test_the_uncalled_method_stays_lazy_and_keeps_its_signature():
         # Its parameters have defaults: nothing injected.
         f.bio = stored["bio"] = fake.paragraph
         f.code = fake.unique.random_int
+        stored["parse"], stored["choice"] = fake.parse, fake.random.choice
 
     # inspect follows __wrapped__, so dependency injection sees the provider's parameters.
     assert "nb_sentences" in inspect.signature(stored["bio"]).parameters
+    assert "text" in inspect.signature(stored["parse"]).parameters
+    assert "seq" in inspect.signature(stored["choice"]).parameters
     seed(1)
     first = [build("user") for _ in range(3)]
     seed(1)
@@ -133,9 +137,38 @@ def test_fakers_own_members_still_work_in_a_body():
     def user():
         seed(3)  # touches fake.unique.clear()
         assert fake["en_US"] is fake
-        f.n = fake.random.randint(1, 1)  # a Random, not a provider: not guarded
+        f.n = lambda: fake.random.randint(1, 1)
 
     assert build("user") == {"n": 1}
+
+
+@pytest.mark.parametrize(
+    ("name", "call"),
+    [
+        ("random.choice", lambda: fake.random.choice(["red", "blue"])),
+        ("parse", lambda: fake.parse("{{first_name}}")),
+        ("format", lambda: fake.format("first_name")),
+    ],
+)
+def test_value_making_helpers_and_fake_random_are_guarded_in_a_body(name, call):
+    with pytest.raises(
+        FactoryError,
+        match=rf"^Factory 'pick': fake\.{re.escape(name)}\(\) was called .* without parentheses: fake\.{re.escape(name)} \(or",
+    ):
+
+        @factory(dict)
+        def pick():
+            f.v = call()
+
+    assert call()  # outside a body: allowed
+
+
+def test_fake_random_is_still_fakes_random_outside_a_body():
+    local = _Fake()
+    replacement = random.Random(1)
+    local.random = replacement
+    assert local.random is replacement
+    assert "seq" in inspect.signature(local.random.choice).parameters
 
 
 def test_a_multi_locale_fake_still_proxies_and_guards():

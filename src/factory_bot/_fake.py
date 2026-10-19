@@ -5,8 +5,8 @@ from faker.generator import Generator
 
 from ._core import FactoryError, _defining_factory
 
-# Generator's own methods (format, parse, add_provider, ...) are helpers, not provider calls.
-_HELPERS = frozenset(dir(Generator))
+# Generator's own methods (add_provider, ...) set the generator up; format and parse make values.
+_HELPERS = frozenset(dir(Generator)) - {"format", "parse"}
 
 
 class _Fake(Faker):
@@ -31,6 +31,16 @@ class _Fake(Faker):
     def optional(self):
         proxy = super().optional  # pyright: ignore[reportAttributeAccessIssue]
         return _Proxy(proxy, "optional") if _defining_factory() else proxy
+
+    # fake.random.choice(...) in a body freezes a value just as a provider call does.
+    @property
+    def random(self):
+        value = super().random  # pyright: ignore[reportAttributeAccessIssue]
+        return _Proxy(value, "random") if _defining_factory() else value
+
+    @random.setter
+    def random(self, value):
+        Faker.random.__set__(self, value)  # pyright: ignore[reportAttributeAccessIssue]
 
 
 class _Proxy:
