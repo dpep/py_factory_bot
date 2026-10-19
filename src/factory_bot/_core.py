@@ -11,7 +11,7 @@ from typing import Any, Generic, Literal, TypeVar, overload
 
 _registry: dict[str, "_Definition"] = {}
 _sequences: weakref.WeakSet["_Sequence"] = weakref.WeakSet()
-_to_create = None
+_persist_hook = None
 # What is running right now, innermost last: factory and trait bodies (definition time), and
 # builds. Immutable tuples, so a thread or task that copied the context never sees another's pushes.
 _stack: ContextVar[tuple["_Definition", ...]] = ContextVar(
@@ -138,9 +138,9 @@ def lint(
         ) from ExceptionGroup("lint failures", [e for _, e in failures])
 
 
-def _set_to_create(fn):
-    global _to_create
-    _to_create = fn
+def _set_persist_hook(fn):
+    global _persist_hook
+    _persist_hook = fn
     return fn
 
 
@@ -521,13 +521,13 @@ def _note_unknown_keywords(e, evaluator, attributes):
 
 
 def _persist(evaluator, obj):
-    if _to_create:
-        _to_create(obj)
+    if _persist_hook:
+        _persist_hook(obj)
         return
     if not hasattr(obj, "save"):
         raise evaluator.error(
             f"can't create a {type(obj).__name__}: it has no save()."
-            " Give it a save() method, or set a global hook with to_create(fn)."
+            " Give it a save() method, or set a global hook with persist_with(fn)."
         )
     obj.save()
 

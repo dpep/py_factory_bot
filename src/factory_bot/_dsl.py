@@ -10,7 +10,7 @@ from ._core import (
     _defining_factory,
     _Definition,
     _register,
-    _set_to_create,
+    _set_persist_hook,
     _stack,
     _takes_leading_argument,
     _where,
@@ -76,16 +76,16 @@ def trait(body: Body) -> Body:
 
 
 @overload
-def to_create(fn: None, /) -> None: ...
+def persist_with(fn: None, /) -> None: ...
 @overload
-def to_create(fn: Fn, /) -> Fn: ...
-def to_create(fn, /):
-    """Persist every created object with fn(obj) instead of obj.save(); to_create(None) restores it."""
+def persist_with(fn: Fn, /) -> Fn: ...
+def persist_with(fn, /):
+    """Persist every created object with fn(obj) instead of obj.save(); persist_with(None) restores it."""
     if _stack.get():
         raise FactoryError(
-            "to_create(fn) sets the global save hook, so call it outside any factory body, e.g. in a fixture."
+            "persist_with(fn) sets the global save hook, so call it outside any factory body, e.g. in a fixture."
         )
-    return _set_to_create(fn)
+    return _set_persist_hook(fn)
 
 
 class _ReadError(FactoryError, AttributeError):

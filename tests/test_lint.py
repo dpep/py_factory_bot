@@ -8,8 +8,8 @@ from factory_bot import (
     f,
     factory,
     lint,
+    persist_with,
     sequence,
-    to_create,
     trait,
 )
 
@@ -86,7 +86,7 @@ def test_lint_without_traits_and_for_some_factories():
 
 def test_lint_create_saves_through_the_hook():
     saved = []
-    to_create(saved.append)
+    persist_with(saved.append)
 
     @factory(dict)
     def post():

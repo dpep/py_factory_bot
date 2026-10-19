@@ -16,7 +16,7 @@ from factory_bot import (
     create_list,
     f,
     factory,
-    to_create,
+    persist_with,
     trait,
 )
 
@@ -36,7 +36,7 @@ def test_the_decorator_returns_a_handle_that_goes_wherever_a_name_goes():
         def admin():
             f.admin = True
 
-    to_create(lambda obj: None)
+    persist_with(lambda obj: None)
     assert isinstance(user, Factory)
     assert user.name == "user"
     assert build(user, "admin", name="Bea") == User("Bea", admin=True)

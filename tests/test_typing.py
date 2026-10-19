@@ -7,6 +7,7 @@ from typing import Any, TypedDict, assert_type
 
 from faker import Faker
 
+import factory_bot.sqlalchemy
 from factory_bot import (
     Factory,
     after_build,
@@ -21,13 +22,12 @@ from factory_bot import (
     factory,
     fake,
     lint,
+    persist_with,
     seed,
     sequence,
-    to_create,
     trait,
     transient,
 )
-from factory_bot.sqlalchemy import persist_with
 
 
 @dataclass
@@ -93,8 +93,10 @@ def test_the_public_api_has_honest_types():
     assert_type(lint(book, "shelf", traits=False), None)
     assert_type(lint(book, strategy="create"), None)
 
-    assert_type(to_create(None), None)
-    assert_type(persist_with(_Session()), Callable[[object], None])
+    assert_type(persist_with(None), None)
+    assert_type(
+        factory_bot.sqlalchemy.persist_with(_Session()), Callable[[object], None]
+    )
     assert_type(fake, Faker)
     assert_type(seed(1), None)
 
@@ -156,7 +158,7 @@ def _misuse_is_a_type_error(book: Factory[Book], untyped: Any) -> None:
 def _decorators_keep_the_type(
     hook: Callable[[object], None], callback: Callable[[Book, int], None]
 ) -> None:
-    assert_type(to_create(hook), Callable[[object], None])
+    assert_type(persist_with(hook), Callable[[object], None])
     assert_type(after_build(callback), Callable[[Book, int], None])
     assert_type(after_create(callback), Callable[[Book, int], None])
 

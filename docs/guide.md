@@ -196,7 +196,7 @@ assert attributes_for("essay") == {"byline": "by Ann"}
 
 A callback's first parameter is the object, whatever you name it; the rest are filled by name, like a lazy attribute, and may name transients. Callbacks can live in a factory, a child or a trait, and run in that order: parent, child, then each trait in the order listed. `after_build` runs on `create` too, before the save, which is where anything that must be saved with the row belongs.
 
-`create` saves with the global `to_create(fn)` hook if one is set, otherwise `obj.save()`. The hook is one setting for the whole process, not per thread.
+`create` saves with the global `persist_with(fn)` hook if one is set, otherwise `obj.save()`. The hook is one setting for the whole process, not per thread.
 
 
 ## Organizing factories
@@ -255,7 +255,7 @@ What the pytest plugin resets before each test, and what it leaves to you:
   ```
 
   Or call `reset_sequences()` yourself.
-- **`to_create(fn)` is global**, for every thread, and outlives the fixture that set it. Reset it with `to_create(None)` in the fixture's teardown, as the [SQLAlchemy recipe](#sqlalchemy-fixtures) does.
+- **`persist_with(fn)` is global**, for every thread, and outlives the fixture that set it. Reset it with `persist_with(None)` in the fixture's teardown, as the [SQLAlchemy recipe](#sqlalchemy-fixtures) does.
 - **Database rows** are your test framework's job. Django's `TestCase` and the SQLAlchemy recipe both roll back.
 
 A test that asserts on a sequence value is the classic way to pass alone and fail in the suite. Pass the value you assert on as an override instead.
@@ -449,8 +449,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from factory_bot import to_create
-from factory_bot.sqlalchemy import persist_with
+from factory_bot import persist_with
+import factory_bot.sqlalchemy
 from myapp.models import Base
 
 
@@ -467,10 +467,10 @@ def session(engine):
     with engine.connect() as connection:
         transaction = connection.begin()
         session = Session(bind=connection, join_transaction_mode="create_savepoint")
-        to_create(persist_with(session))
+        persist_with(factory_bot.sqlalchemy.persist_with(session))
         yield session
         # The hook is global: don't leave it pointing at a closed session.
-        to_create(None)
+        persist_with(None)
         session.close()
         transaction.rollback()
 ```
@@ -528,7 +528,7 @@ Every `FactoryError` names the factory involved, and most suggest the fix. The o
 
   Checked at build time, so an association's factory may be defined after the one that uses it.
 
-- `Factory 'user': can't create a dict: it has no save(). Give it a save() method, or set a global hook with to_create(fn).`
+- `Factory 'user': can't create a dict: it has no save(). Give it a save() method, or set a global hook with persist_with(fn).`
 
   `create` needs to know how to save. Django models have `save()`; for SQLAlchemy, use `persist_with`. If this appears in a test that should have a database, the fixture that sets the hook didn't run.
 
@@ -556,7 +556,7 @@ Defining:
 | `association("name", *traits, **overrides)` | Another factory's object. |
 | `transient(value)` | An input that never reaches the model. |
 | `@after_build`, `@after_create` | Callbacks: `fn(obj, **dependencies)`. |
-| `to_create(fn)` | The global save hook; `to_create(None)` restores `obj.save()`. |
+| `persist_with(fn)` | The global save hook; `persist_with(None)` restores `obj.save()`. |
 
 Using, each taking `(name, *traits, **overrides)`:
 

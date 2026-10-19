@@ -1,7 +1,7 @@
 import pytest
 from support.models import Post, User
 
-from factory_bot import FactoryError, build, create, f, factory, to_create, trait
+from factory_bot import FactoryError, build, create, f, factory, persist_with, trait
 
 
 def test_create_builds_then_saves():
@@ -18,9 +18,9 @@ def test_create_builds_then_saves():
     assert created.saved
 
 
-def test_to_create_replaces_save_for_every_factory():
+def test_persist_with_replaces_save_for_every_factory():
     saved = []
-    to_create(saved.append)
+    persist_with(saved.append)
 
     @factory(dict)
     def point():
@@ -38,14 +38,14 @@ def test_an_object_without_save_names_both_fixes():
     with pytest.raises(
         FactoryError,
         match=r"^Factory 'point': can't create a dict: it has no save\(\)\. "
-        r"Give it a save\(\) method, or set a global hook with to_create\(fn\)\.$",
+        r"Give it a save\(\) method, or set a global hook with persist_with\(fn\)\.$",
     ):
         create("point")
 
 
-def test_to_create_none_restores_save():
-    to_create(lambda obj: None)
-    to_create(None)
+def test_persist_with_none_restores_save():
+    persist_with(lambda obj: None)
+    persist_with(None)
 
     @factory(User)
     def user():
@@ -54,13 +54,13 @@ def test_to_create_none_restores_save():
     assert create("user").saved
 
 
-def test_to_create_inside_a_body_points_at_the_global_hook():
-    message = r"^Factory 'point': to_create\(fn\) sets the global save hook, so call it outside any factory body, e\.g\. in a fixture\.$"
+def test_persist_with_inside_a_body_points_at_the_global_hook():
+    message = r"^Factory 'point': persist_with\(fn\) sets the global save hook, so call it outside any factory body, e\.g\. in a fixture\.$"
     with pytest.raises(FactoryError, match=message):
 
         @factory(dict)
         def point():
-            to_create(print)
+            persist_with(print)
 
     with pytest.raises(FactoryError, match=message):
 
@@ -68,7 +68,7 @@ def test_to_create_inside_a_body_points_at_the_global_hook():
         def point():
             @trait
             def stored():
-                to_create(print)
+                persist_with(print)
 
 
 def test_create_while_a_factory_is_being_defined_is_an_error():

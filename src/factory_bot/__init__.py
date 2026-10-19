@@ -13,7 +13,7 @@ from ._core import (
     sequence,
     transient,
 )
-from ._dsl import after_build, after_create, f, factory, to_create, trait
+from ._dsl import after_build, after_create, f, factory, persist_with, trait
 from ._fake import fake, seed
 
 __author__ = "dpepper"
@@ -35,10 +35,10 @@ __all__ = [
     "factory",
     "fake",
     "lint",
+    "persist_with",
     "reset_sequences",
     "seed",
     "sequence",
-    "to_create",
     "trait",
     "transient",
 ]

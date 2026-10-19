@@ -12,7 +12,7 @@ from factory_bot import (
     create,
     f,
     factory,
-    to_create,
+    persist_with,
     trait,
     transient,
 )
@@ -205,7 +205,7 @@ def books():
 
 
 def test_an_id_override_skips_the_association_and_reaches_the_model(books):
-    to_create(lambda obj: None)
+    persist_with(lambda obj: None)
     for strategy in (build, create, attributes_for):
         assert strategy("book", author_id=7) == {"title": "Dune", "author_id": 7}
     assert books == []

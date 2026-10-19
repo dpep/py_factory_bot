@@ -1,10 +1,10 @@
 import pytest
 
-from factory_bot import clear_factories, reset_sequences, to_create
+from factory_bot import clear_factories, persist_with, reset_sequences
 
 
 @pytest.fixture(autouse=True)
 def clean_registry():
     clear_factories()
     reset_sequences()
-    to_create(None)
+    persist_with(None)
