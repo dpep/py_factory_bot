@@ -185,7 +185,7 @@ def test_a_factory_error_raised_in_a_build_names_the_factory():
         f.book = lambda: build("nope")
 
     with pytest.raises(
-        FactoryError, match=r"^Factory 'shelf': No factory named 'nope'\.$"
+        FactoryError, match=r"^Factory 'shelf': No factory named 'nope'\.\n"
     ):
         build("shelf")
 
@@ -201,3 +201,25 @@ def test_a_nested_factory_error_names_the_innermost_factory():
 
     with pytest.raises(FactoryError, match=r"^Factory 'inner': 'y' depends on"):
         build("outer")
+
+
+def test_a_factory_error_keeps_the_steps_that_led_to_it():
+    @factory(dict)
+    def inner():
+        f.y = lambda missing: 1
+
+    @factory(dict)
+    def outer():
+        f.i = association("inner")
+        f.j = lambda: build("nope")
+
+    with pytest.raises(FactoryError) as excinfo:
+        build("outer", j=None)
+    # The inner error names its own step; the outer build adds how it got there.
+    assert notes(excinfo) == ["while building factory 'outer', attribute 'i'"]
+
+    with pytest.raises(FactoryError) as excinfo:
+        build("outer", i=None)
+    assert [n.split(" (")[0] for n in notes(excinfo)] == [
+        "while building factory 'outer', attribute 'j'"
+    ]

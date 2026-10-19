@@ -167,7 +167,7 @@ def test_an_association_cycle_names_the_chain():
     def user():
         f.post = association("post")
 
-    message = r"^Factory 'post': circular association: post\.author -> user\.post -> post\.author$"
+    message = r"^Factory 'post': circular association: post\.author -> user\.post -> post\.author\n"
     with pytest.raises(FactoryError, match=message):
         build("post")
 
@@ -181,7 +181,7 @@ def test_an_association_cycle_through_a_lazy_attribute_names_the_chain():
     def post():
         f.author = association("user")
 
-    message = r"^Factory 'user': circular association: user\.posts -> post\.author -> user\.posts$"
+    message = r"^Factory 'user': circular association: user\.posts -> post\.author -> user\.posts\n"
     with pytest.raises(FactoryError, match=message):
         build("user")
 

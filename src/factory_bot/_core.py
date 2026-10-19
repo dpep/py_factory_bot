@@ -236,7 +236,7 @@ class _Evaluator:
             return self.values[name]
         if name in self.resolving:
             cycle = " -> ".join([*self.resolving[self.resolving.index(name) :], name])
-            raise FactoryError(f"circular dependency: {cycle}")
+            raise self.error(f"circular dependency: {cycle}")
         self.resolving.append(name)
         try:
             self.values[name] = self.evaluate(name, self.definitions[name])
@@ -262,9 +262,14 @@ class _Evaluator:
             return self.call(name, value)
         return _fresh(value)
 
+    def error(self, message):
+        """A FactoryError raised by this build: its message says where, so it needs no note here."""
+        self.noted = FactoryError(message)
+        return self.noted
+
     def note(self, e, detail="", verb="building"):
-        # Ours already name the factory; a dependency's failure is noted where it happened.
-        if not isinstance(e, FactoryError) and e is not self.noted:
+        # A dependency's failure is noted where it happened, not again by each dependent.
+        if e is not self.noted:
             e.add_note(f"while {verb} factory {self.factory_name!r}{detail}")
             self.noted = e
 
@@ -272,9 +277,9 @@ class _Evaluator:
         positional, keyword = _dependencies(fn, skip=len(leading))
         for dep in [*positional, *keyword]:
             if dep not in self.definitions:
-                raise FactoryError(
+                raise self.error(
                     f"{name!r} depends on {dep!r}, which is not defined."
-                    f"{_suggest(dep, self.definitions)}{_where(fn)}",
+                    f"{_suggest(dep, self.definitions)}{_where(fn)}"
                 )
         args = [self.get(dep) for dep in positional]
         return fn(*leading, *args, **{dep: self.get(dep) for dep in keyword})
@@ -283,9 +288,9 @@ class _Evaluator:
         name = name or (self.resolving[-1] if self.resolving else None)
         if assoc.name not in _registry:
             what = f"{name!r} is an association" if name else "an association"
-            raise FactoryError(
+            raise self.error(
                 f"{what} to {assoc.name!r}, which is not a factory."
-                f"{_suggest(assoc.name, _registry)}",
+                f"{_suggest(assoc.name, _registry)}"
             )
         # attributes_for omits associations, but a dependent attribute may still need the object.
         strategy = "create" if self.strategy == "create" else "build"
@@ -300,8 +305,8 @@ class _Evaluator:
         for i, outer in enumerate(building):
             if outer.via and outer.via[1] == key:
                 chain = [e.via[0] for e in building[i:] if e.via]
-                raise FactoryError(
-                    f"circular association: {' -> '.join([*chain, label])}",
+                raise self.error(
+                    f"circular association: {' -> '.join([*chain, label])}"
                 )
         return _run(strategy, assoc.name, assoc.traits, assoc.overrides, (label, key))
 
@@ -340,7 +345,7 @@ def _construct(strategy, fac, layers, evaluator):
     _run_callbacks(evaluator, layers, "after_build", obj)
     if strategy == "create":
         try:
-            _persist(fac, obj)
+            _persist(evaluator, fac, obj)
         except Exception as e:
             evaluator.note(e, verb="saving")
             raise
@@ -380,7 +385,7 @@ def _note_unknown_keywords(e, evaluator, attributes):
             )
 
 
-def _persist(fac, obj):
+def _persist(evaluator, fac, obj):
     hook = next(
         (d.to_create for d in reversed(fac.lineage()) if d.to_create), _to_create
     )
@@ -388,9 +393,9 @@ def _persist(fac, obj):
         hook(obj)
         return
     if not hasattr(obj, "save"):
-        raise FactoryError(
+        raise evaluator.error(
             f"can't create a {type(obj).__name__}: it has no save()."
-            " Give it a save() method, or set a hook with to_create(fn), at top level or inside the factory.",
+            " Give it a save() method, or set a hook with to_create(fn), at top level or inside the factory."
         )
     obj.save()
 
