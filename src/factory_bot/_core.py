@@ -7,6 +7,7 @@ import weakref
 
 _registry: dict[str, "_Factory"] = {}
 _sequences: weakref.WeakSet["_Sequence"] = weakref.WeakSet()
+_to_create = None
 
 
 class FactoryError(Exception):
@@ -35,12 +36,22 @@ def factory(model):
 
 
 def build(name, /, *traits, **overrides):
-    fac = _lookup(name)
-    return fac.model(**fac.attributes_for(traits, overrides))
+    return _run("build", name, traits, overrides)
+
+
+def create(name, /, *traits, **overrides):
+    return _run("create", name, traits, overrides)
 
 
 def attributes_for(name, /, *traits, **overrides):
-    return _lookup(name).attributes_for(traits, overrides)
+    return _run("attributes_for", name, traits, overrides)
+
+
+def to_create(fn):
+    """Persist every created object with fn(obj) instead of obj.save(); None restores the default."""
+    global _to_create
+    _to_create = fn
+    return fn
 
 
 def sequence(fn):
@@ -71,9 +82,6 @@ class _Factory:
         self.attributes = {}
         self.traits = {}
         body(_Definition(self, self.attributes))
-
-    def attributes_for(self, traits, overrides):
-        return _Evaluator(self.name, self.definitions(traits), overrides).attributes()
 
     def definitions(self, traits):
         definitions = dict(self.attributes)
@@ -168,6 +176,29 @@ class _Evaluator:
         if isinstance(value, (list, dict, set)):
             return copy.copy(value)
         return value
+
+
+def _run(strategy, name, traits, overrides):
+    fac = _lookup(name)
+    attributes = _Evaluator(fac.name, fac.definitions(traits), overrides).attributes()
+    if strategy == "attributes_for":
+        return attributes
+    obj = fac.model(**attributes)
+    if strategy == "create":
+        _persist(fac.name, obj)
+    return obj
+
+
+def _persist(factory_name, obj):
+    if _to_create:
+        _to_create(obj)
+        return
+    if not hasattr(obj, "save"):
+        raise FactoryError(
+            f"Factory {factory_name!r}: can't create a {type(obj).__name__}: it has no save()."
+            " Give it a save() method, or set a hook with factory_bot.to_create(fn)."
+        )
+    obj.save()
 
 
 def _dependencies(fn):
