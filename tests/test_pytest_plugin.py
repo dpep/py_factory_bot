@@ -131,135 +131,6 @@ def test_p_no_factory_bot_disables_the_plugin(suite):
     assert "factory_bot:" not in result.stdout.str()
 
 
-HOOKS_CONFTEST = """
-import pytest
-from factory_bot import persist_with
-
-def at_import(obj): ...
-def in_fixture(obj): ...
-def in_session(obj): ...
-
-persist_with(at_import)
-
-@pytest.fixture
-def leaky():
-    persist_with(in_fixture)  # no teardown
-
-@pytest.fixture(scope="session")
-def session_hook():
-    persist_with(in_session)  # no teardown
-"""
-
-HOOKS = """
-from factory_bot import _core, persist_with
-
-def in_test(obj): ...
-
-def hook():
-    return _core._persist_hook.__name__
-
-def test_a_fixture(leaky):
-    print(f"test_a_fixture={hook()}")
-
-def test_b_body():
-    persist_with(in_test)
-    print(f"test_b_body={hook()}")
-
-def test_c_after():
-    print(f"test_c_after={hook()}")
-
-def test_d_session(session_hook):
-    print(f"test_d_session={hook()}")
-
-def test_e_after_session():
-    print(f"test_e_after_session={hook()}")
-"""
-
-
-@pytest.fixture
-def hooks(pytester):
-    pytester.makeconftest(HOOKS_CONFTEST)
-    pytester.makepyfile(test_hooks=HOOKS)
-    return pytester
-
-
-def test_a_persist_with_hook_set_by_a_test_or_its_function_fixtures_is_undone_after_it(
-    hooks,
-):
-    # A conftest's import-time hook is the baseline every test returns to.
-    data = names(run(hooks))
-    assert data["test_a_fixture"] == "in_fixture"
-    assert data["test_b_body"] == "in_test"
-    assert data["test_c_after"] == "at_import"
-
-
-def test_a_session_fixtures_persist_with_hook_stays_while_the_session_fixture_does(
-    hooks,
-):
-    # The restore runs inside the higher-scoped fixtures, so they own their own teardown.
-    data = names(run(hooks))
-    assert data["test_d_session"] == "in_session"
-    assert data["test_e_after_session"] == "in_session"
-
-
-MODULE_HOOK = """
-import pytest
-from factory_bot import _core, persist_with
-
-def in_module(obj): ...
-
-@pytest.fixture(scope="module")
-def module_hook():
-    persist_with(in_module)  # no undo
-    yield
-    print(f"teardown={_core._persist_hook.__name__}")
-
-def test_m1(module_hook):
-    print(f"test_m1={_core._persist_hook.__name__}")
-"""
-
-NEXT_MODULE = """
-from factory_bot import _core
-
-def test_m2():
-    print(f"test_m2={_core._persist_hook.__name__}")
-"""
-
-
-@pytest.fixture
-def modules(hooks):
-    hooks.makepyfile(test_m1=MODULE_HOOK, test_m2=NEXT_MODULE)
-    return hooks
-
-
-def test_a_module_fixtures_persist_with_hook_is_undone_after_its_teardown(modules):
-    result = run(modules, "test_m1.py", "test_m2.py")
-    assert names(result) == {"test_m1": "in_module", "test_m2": "at_import"}
-    # Undone after the fixture's own teardown, which may still save with it.
-    assert "teardown=in_module" in result.stdout.str()
-
-
-def test_a_session_fixtures_persist_with_hook_lasts_the_session(hooks):
-    hooks.makepyfile(
-        test_s1="def test_s1(session_hook):\n    print('test_s1=ok')",
-        test_s2=NEXT_MODULE,
-    )
-    data = names(run(hooks, "test_s1.py", "test_s2.py"))
-    assert data["test_m2"] == "in_session"
-
-
-def test_p_no_factory_bot_leaves_the_persist_with_hook_alone(hooks):
-    data = names(run(hooks, "-p", "no:factory_bot"))
-    assert data["test_a_fixture"] == "in_fixture"
-    assert data["test_b_body"] == "in_test"
-    assert data["test_c_after"] == "in_test"
-
-
-def test_p_no_factory_bot_leaves_a_module_fixtures_hook_in_place(modules):
-    data = names(run(modules, "test_m1.py", "test_m2.py", "-p", "no:factory_bot"))
-    assert data["test_m2"] == "in_module"
-
-
 def test_pytest_randomly_seed_drives_the_data_too(suite):
     pytest.importorskip("pytest_randomly")
 
@@ -308,79 +179,6 @@ def test_fake_unique_starts_fresh_each_test(pytester):
 
     assert reversed_order == together
     assert alone["test_b"] == together["test_b"]
-
-
-# A fixture restores only a hook it changed: the hook it found may be a test's, already undone.
-
-LAZY = """
-import pytest
-from factory_bot import persist_with
-
-def in_test(obj): ...
-
-@pytest.fixture(scope="module")
-def mod_resource():
-    return "resource"
-
-@pytest.fixture(scope="class")
-def cls_resource():
-    return "resource"
-
-class TestK:
-    def test_class(self, request):
-        persist_with(in_test)
-        request.getfixturevalue("cls_resource")
-
-    def test_after_class(self):
-        pass
-
-def test_module(request):
-    persist_with(in_test)
-    request.getfixturevalue("mod_resource")
-"""
-
-
-@pytest.mark.parametrize("which", ["test_lazy.py", "test_lazy.py::TestK"])
-def test_a_fixture_set_up_lazily_does_not_restore_the_tests_hook(hooks, which):
-    hooks.makepyfile(test_lazy=LAZY, test_next=NEXT_MODULE)
-    result = hooks.runpytest("-s", "-p", "no:randomly", which, "test_next.py")
-    result.assert_outcomes(passed=4 if which == "test_lazy.py" else 3)
-    assert names(result)["test_m2"] == "at_import"
-
-
-AUTOUSE_CONFTEST = """
-import pytest
-from factory_bot import _core, persist_with
-
-def at_import(obj): ...
-def in_autouse(obj): ...
-
-persist_with(at_import)
-
-@pytest.fixture(autouse=True)
-def autouse_hook():
-    persist_with(in_autouse)  # no undo, like a per-test database fixture
-
-@pytest.fixture(scope="session")
-def session_resource():  # like pytest-django's django_db_setup
-    return "resource"
-
-def pytest_sessionfinish():
-    print(f"test_session_end={_core._persist_hook.__name__}")
-"""
-
-
-def test_a_session_fixture_set_up_after_an_autouse_hook_does_not_restore_it(
-    pytester,
-):
-    pytester.makeconftest(AUTOUSE_CONFTEST)
-    pytester.makepyfile(
-        test_lazy="def test_lazy(request):\n    request.getfixturevalue('session_resource')"
-    )
-    # Faker's plugin sets up a session fixture first, whose teardown would mask the leak.
-    result = pytester.runpytest("-s", "-p", "no:randomly", "-p", "no:faker")
-    result.assert_outcomes(passed=1)
-    assert names(result)["test_session_end"] == "at_import"
 
 
 PARAMS = """
@@ -436,3 +234,274 @@ def test_seed_in_a_fixture_pins_the_data_after_it(pytester, autouse):
     pytester.makepyfile(test_seeded=SEEDED.replace("__AUTOUSE__", str(autouse)))
     data = names(run(pytester))
     assert data["test_seeded"] == data["test_expected"]
+
+
+# persist_with: each call belongs to the test or fixture running it, and lasts until that ends.
+
+HELPERS = """
+from factory_bot import create, factory
+
+class Thing:
+    by = None
+
+    def save(self):
+        self.by = "save"
+
+@factory(Thing)
+def thing():
+    pass
+
+def hook(name):
+    def save(obj):
+        obj.by = name
+    return save
+
+def saved_by():
+    return create(thing).by
+"""
+
+OWNERS_CONFTEST = """
+import pytest
+from factory_bot import persist_with
+from helpers import hook, saved_by
+
+persist_with(hook("at_import"))
+
+@pytest.fixture
+def in_fixture():
+    persist_with(hook("in_fixture"))
+    yield
+    assert saved_by() == "in_fixture"
+
+@pytest.fixture(scope="module")
+def in_module():
+    persist_with(hook("in_module"))
+    yield
+    assert saved_by() == "in_module"
+
+@pytest.fixture(scope="session")
+def in_session():
+    persist_with(hook("in_session"))
+
+@pytest.fixture(scope="module")
+def module_resource():
+    return "resource"
+
+@pytest.fixture(scope="session")
+def session_resource():
+    return "resource"
+"""
+
+PREAMBLE = """
+import pytest
+from factory_bot import persist_with
+from helpers import hook, saved_by
+"""
+
+AT_IMPORT = """
+def test_next_module():
+    assert saved_by() == "at_import"
+"""
+
+
+@pytest.fixture
+def owners(pytester):
+    pytester.makepyfile(helpers=HELPERS)
+    pytester.makeconftest(OWNERS_CONFTEST)
+    return pytester
+
+
+def run_owners(pytester, passed, *args, **files):
+    """Runs the files in name order, each a test module that asserts on saved_by()."""
+    pytester.makepyfile(**{name: PREAMBLE + code for name, code in files.items()})
+    paths = [f"{name}.py" for name in sorted(files)]
+    result = pytester.runpytest("-p", "no:randomly", *args, *paths)
+    result.assert_outcomes(passed=passed)
+
+
+def test_a_hook_set_at_import_lasts_the_session(owners):
+    test_1 = """
+def test_a():
+    assert saved_by() == "at_import"
+
+def test_b(in_fixture):
+    pass
+"""
+    run_owners(owners, 3, test_1=test_1, test_2=AT_IMPORT)
+
+
+def test_a_function_fixtures_hook_lasts_until_its_teardown(owners):
+    # in_fixture's teardown asserts it still sees its own hook.
+    test_1 = """
+def test_a(in_fixture):
+    assert saved_by() == "in_fixture"
+
+def test_b():
+    assert saved_by() == "at_import"
+"""
+    run_owners(owners, 2, test_1=test_1)
+
+
+def test_a_tests_hook_lasts_until_the_test_ends(owners):
+    test_1 = """
+def test_a():
+    persist_with(hook("in_test"))
+    assert saved_by() == "in_test"
+
+def test_b():
+    assert saved_by() == "at_import"
+"""
+    run_owners(owners, 2, test_1=test_1)
+
+
+def test_a_session_fixture_created_lazily_by_a_test_keeps_its_hook(owners):
+    test_1 = """
+def test_a(request):
+    request.getfixturevalue("in_session")
+    assert saved_by() == "in_session"
+
+def test_b(in_session):
+    assert saved_by() == "in_session"
+"""
+    test_2 = """
+def test_c():
+    assert saved_by() == "in_session"
+"""
+    run_owners(owners, 3, test_1=test_1, test_2=test_2)
+
+
+@pytest.mark.parametrize("resource", ["module_resource", "session_resource"])
+@pytest.mark.parametrize("autouse", [False, True])
+def test_a_fixture_created_lazily_does_not_keep_the_hook_it_found(
+    owners, resource, autouse
+):
+    test_1 = f"""
+@pytest.fixture(autouse={autouse})
+def autouse_hook():
+    persist_with(hook("in_autouse"))
+
+def test_a(request):
+    persist_with(hook("in_test"))
+    request.getfixturevalue("{resource}")
+
+def test_b({resource}):
+    assert saved_by() == "{"in_autouse" if autouse else "at_import"}"
+"""
+    run_owners(owners, 3, test_1=test_1, test_2=AT_IMPORT)
+
+
+def test_the_most_recent_hook_wins_and_each_lasts_as_long_as_its_owner(owners):
+    # in_module's teardown asserts it still sees its own hook.
+    test_1 = """
+def test_a(request):
+    persist_with(hook("in_test"))
+    request.getfixturevalue("in_module")
+    assert saved_by() == "in_module"
+    persist_with(hook("in_test_again"))
+    assert saved_by() == "in_test_again"
+
+def test_b(in_module):
+    assert saved_by() == "in_module"
+
+def test_c():
+    assert saved_by() == "in_module"
+"""
+    run_owners(owners, 4, test_1=test_1, test_2=AT_IMPORT)
+
+
+def test_persist_with_none_saves_with_save_until_its_owner_ends(owners):
+    test_1 = """
+def test_a(in_session):
+    persist_with(None)
+    assert saved_by() == "save"
+
+def test_b(in_session):
+    assert saved_by() == "in_session"
+"""
+    run_owners(owners, 2, test_1=test_1)
+
+
+def test_a_hook_set_in_a_fixtures_teardown_ends_with_it(owners):
+    test_1 = """
+@pytest.fixture
+def undoes():
+    persist_with(hook("in_fixture"))
+    yield
+    persist_with(None)  # a manual undo, as written before the plugin did it
+
+def test_a(undoes):
+    pass
+
+def test_b():
+    assert saved_by() == "at_import"
+"""
+    run_owners(owners, 2, test_1=test_1)
+
+
+def test_a_fixture_that_fails_setup_ends_with_its_hook(owners):
+    test_1 = """
+@pytest.fixture
+def broken():
+    persist_with(hook("in_broken"))
+    raise RuntimeError
+
+def test_a(broken):
+    pass
+
+def test_b():
+    assert saved_by() == "at_import"
+"""
+    owners.makepyfile(test_1=PREAMBLE + test_1)
+    result = owners.runpytest("-p", "no:randomly")
+    result.assert_outcomes(passed=1, errors=1)
+
+
+def test_p_no_factory_bot_makes_persist_with_global(owners):
+    test_1 = """
+def test_a():
+    persist_with(hook("in_test"))
+
+def test_b():
+    assert saved_by() == "in_test"
+"""
+    run_owners(owners, 2, "-p", "no:factory_bot", test_1=test_1)
+
+
+def test_outside_pytest_persist_with_is_global(owners):
+    owners.makepyfile(
+        script="""
+from factory_bot import persist_with
+from helpers import hook, saved_by
+
+persist_with(hook("first"))
+persist_with(hook("second"))
+assert saved_by() == "second"
+persist_with(None)
+assert saved_by() == "save"
+print("ok")
+"""
+    )
+    result = owners.runpython(owners.path / "script.py")
+    assert result.ret == 0
+    assert result.outlines == ["ok"]
+
+
+def test_hooks_hold_under_xdist_and_randomly(owners):
+    pytest.importorskip("xdist")
+    pytest.importorskip("pytest_randomly")
+    module = """
+def test_fixture(in_fixture):
+    assert saved_by() == "in_fixture"
+
+def test_body():
+    persist_with(hook("in_test"))
+    assert saved_by() == "in_test"
+
+def test_import():
+    assert saved_by() == "at_import"
+"""
+    owners.makepyfile(**{f"test_{i}": PREAMBLE + module for i in range(4)})
+    for seed in (1, 2):
+        # A subprocess: a second in-process run would redefine helpers' factory.
+        result = owners.runpytest_subprocess("-n", "2", f"--randomly-seed={seed}")
+        result.assert_outcomes(passed=12)

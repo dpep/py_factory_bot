@@ -1,6 +1,6 @@
 """Reseed `fake` (and reset `fake.unique`) before each test, and reseed it for each fixture from the
-fixture's own scope; undo a `persist_with` hook when the test or fixture that set it ends; optionally
-reset sequences. Disable with -p no:factory_bot."""
+fixture's own scope; tell persist_with which test or fixture is running, so its hook ends with
+it; optionally reset sequences. Disable with -p no:factory_bot."""
 
 import pytest
 
@@ -37,15 +37,9 @@ def pytest_fixture_setup(fixturedef, request):
     # request.node is the fixture's scope node (test, module, session), not its definition:
     # seeding from the definition would give a function fixture the same data in every test.
     # fake.unique is left alone, so a test and its fixtures share one seen-set.
-    before = after = _core._persist_hook
-
-    def restore_hook():
-        # Only a hook this fixture set: the one it found may be a test's, since undone.
-        if after is not before:
-            _core._set_persist_hook(before)
-
-    # Registered before setup so it runs after the fixture's own teardown (finalizers are LIFO).
-    request.addfinalizer(restore_hook)
+    owner = object()
+    # Registered before setup, so it runs after the fixture's own teardown (finalizers are LIFO).
+    request.addfinalizer(lambda: _core._end_owner(owner))
     state, generation = fake.random.getstate(), _fake._generation
     key = f"{_seed(request.config)}:{request.node.nodeid}::{fixturedef.argname}"
     if hasattr(request, "param"):
@@ -54,22 +48,28 @@ def pytest_fixture_setup(fixturedef, request):
         # only costs distinct data per param.
         key += f"[{getattr(request, 'param_index', 0)}]"
     fake.seed_instance(key)
+    _core._enter_owner(owner)
     try:
-        return (yield)
+        result = yield
     finally:
-        after = _core._persist_hook
+        _core._leave_owner(owner)
         # Resume the stream the setup interrupted, so the requesting test's data stays its
         # own; unless the fixture called seed(), which is the stream it chose.
         if _fake._generation == generation:
             fake.random.setstate(state)
+    # Runs before the fixture's teardown, so a persist_with there is the fixture's too.
+    request.addfinalizer(lambda: _core._enter_owner(owner))
+    return result
 
 
-@pytest.fixture(autouse=True)
-def _factory_bot_restore_persist_hook():
-    # Undoes what the test body set; pytest_fixture_setup undoes what each fixture set.
-    hook = _core._persist_hook
-    yield
-    _core._set_persist_hook(hook)
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_call(item):
+    owner = object()
+    _core._enter_owner(owner)
+    try:
+        return (yield)
+    finally:
+        _core._end_owner(owner)
 
 
 def _seed(config):

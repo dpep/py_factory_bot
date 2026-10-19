@@ -15,7 +15,6 @@ from typing import Any, Generic, Literal, Protocol, TypeVar, overload
 
 _registry: dict[str, "_Definition"] = {}
 _sequences: weakref.WeakSet["_Sequence"] = weakref.WeakSet()
-_persist_hook = None
 # What is running right now, innermost last: factory and trait bodies (definition time), and
 # builds. Immutable tuples, so a thread or task that copied the context never sees another's pushes.
 _stack: ContextVar[tuple["_Definition", ...]] = ContextVar(
@@ -576,7 +575,7 @@ def persist_with(hook, /):
     """
     if _stack.get():
         raise FactoryError(
-            "persist_with() sets the global save hook, so call it outside any factory body, e.g. in a fixture."
+            "persist_with() sets the save hook, so call it outside any factory body, e.g. in a fixture."
         )
     maker = getattr(hook, "class_", None)
     if _is_session(hook):
@@ -609,10 +608,32 @@ _ASYNC_FIX = (
 )
 
 
-# The seam the pytest plugin reads and restores the hook through.
+# Each persist_with call belongs to its owner, the test or fixture the pytest plugin says is
+# running, else the permanent base owner. The most recent call of a live owner decides; an
+# owner's later call replaces its earlier one, which could only matter once both were gone.
+_BASE = object()
+_owners: list[object] = []  # innermost last
+_hooks: dict[object, Callable[[Any], object] | None] = {}  # by owner, most recent last
+
+
 def _set_persist_hook(fn):
-    global _persist_hook
-    _persist_hook = fn
+    owner = _owners[-1] if _owners else _BASE
+    _hooks.pop(owner, None)
+    _hooks[owner] = fn
+
+
+def _enter_owner(owner):
+    _owners.append(owner)
+
+
+def _leave_owner(owner):
+    if owner in _owners:
+        _owners.remove(owner)
+
+
+def _end_owner(owner):
+    _leave_owner(owner)
+    _hooks.pop(owner, None)
 
 
 def _is_session(obj):
@@ -625,8 +646,8 @@ def _add_and_flush(session, obj):
 
 
 def _persist(evaluator, obj):
-    if _persist_hook:
-        _persist_hook(obj)
+    if hook := next(reversed(_hooks.values()), None):
+        hook(obj)
         return
     if not hasattr(obj, "save"):
         raise evaluator.error(

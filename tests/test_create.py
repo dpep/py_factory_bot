@@ -158,8 +158,8 @@ def test_persist_with_anything_else_lists_what_it_takes(hook, shown):
         persist_with(hook)
 
 
-def test_persist_with_inside_a_body_points_at_the_global_hook():
-    message = r"^Factory 'point': persist_with\(\) sets the global save hook, so call it outside any factory body, e\.g\. in a fixture\.$"
+def test_persist_with_inside_a_body_is_an_error():
+    message = r"^Factory 'point': persist_with\(\) sets the save hook, so call it outside any factory body, e\.g\. in a fixture\.$"
     with pytest.raises(FactoryError, match=message):
 
         @factory(dict)

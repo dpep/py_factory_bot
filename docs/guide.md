@@ -264,7 +264,7 @@ To replace one at build time:
 - `persist_with(session)` adds each object to a SQLAlchemy `Session` or `scoped_session` and flushes, never commits.
 - `persist_with(None)` goes back to `obj.save()`.
 
-The setting is global. Under pytest, one made in a test or fixture is undone when that test or fixture ends.
+The most recent call wins. Under pytest, a `persist_with` set by a test or fixture lasts until that test or fixture ends.
 
 ```python
 from factory_bot import persist_with
@@ -361,7 +361,6 @@ Define factories at module level, not in tests or fixtures, since names are glob
 The pytest plugin:
 
 - **Reseeds `fake`** for every test and every fixture, at any scope, from the run's seed and its id. Each gets the same fake data alone, in the suite, in any order or under pytest-xdist. With pytest-randomly, each run picks a new seed, and `--randomly-seed=N` replays it.
-- **Undoes `persist_with`** when the test or fixture that called it ends.
 - **Leaves sequences counting** across tests, unless you ask. Restarting them makes two tests both create `user1`, which collides when rows survive between tests. If every test rolls back, turn it on:
 
   ```toml

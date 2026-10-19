@@ -17,7 +17,7 @@
 ### Added
 
 <!-- lane: hunt2-core -->
-- `create` builds, then saves: `obj.save()` by default. `persist_with(fn)` saves with a function instead, and `persist_with(session)` adds and flushes to a SQLAlchemy `Session` or `scoped_session`, never committing, so the test's transaction still decides. `persist_with(None)` restores `obj.save()`. An `AsyncSession` or `async_sessionmaker` is an error naming the fix: its `sync_session`, with `create()` called inside `await session.run_sync(...)`.
+- `create` builds, then saves: `obj.save()` by default. `persist_with(fn)` saves with a function instead, and `persist_with(session)` adds and flushes to a SQLAlchemy `Session` or `scoped_session`, never committing, so the test's transaction still decides. `persist_with(None)` restores `obj.save()`. The most recent call wins, and under pytest one set by a test or fixture lasts until that test or fixture ends. An `AsyncSession` or `async_sessionmaker` is an error naming the fix: its `sync_session`, with `create()` called inside `await session.run_sync(...)`.
 <!-- /lane -->
 - `build_list` and `create_list`.
 - `association(factory, *traits, **overrides)` makes another factory's object with the parent's strategy: built for `build`, created first for `create`. Called during a build, from a lambda or a callback, it makes the object right away, for associations that depend on other attributes or come in lists. `attributes_for` leaves associations out unless you pass them.
@@ -36,7 +36,7 @@
 - A sequence's function gets the counter first, then other attributes by name: `sequence(lambda n, title: f"{slugify(title)}-{n}")`.
 - `lint()` builds every factory once, then once with each trait, and raises one error listing every call that failed, ready to paste into a test.
 <!-- lane: hunt2-plugin -->
-- A pytest plugin, on by default. It reseeds `fake` before each test from the test's id, and for each fixture from its name, its param and the test, module or session it belongs to, so every test and fixture gets the same fake data alone, in the suite, in any order or under pytest-xdist; with pytest-randomly, `--randomly-seed` drives it. A fixture that calls `seed()` keeps that seed. A `persist_with` set by a test or a fixture of any scope is undone when that test or fixture ends. `factory_bot_reset_sequences = true` restarts sequences per test. The report header shows the seed and whether sequences reset: `factory_bot: seed=0, reset_sequences=off`. Disable it with `-p no:factory_bot`.
+- A pytest plugin, on by default. It reseeds `fake` before each test from the test's id, and for each fixture from its name, its param and the test, module or session it belongs to, so every test and fixture gets the same fake data alone, in the suite, in any order or under pytest-xdist; with pytest-randomly, `--randomly-seed` drives it. A fixture that calls `seed()` keeps that seed. It ends a `persist_with` with the test or fixture that set it. `factory_bot_reset_sequences = true` restarts sequences per test. The report header shows the seed and whether sequences reset: `factory_bot: seed=0, reset_sequences=off`. Disable it with `-p no:factory_bot`.
 <!-- /lane -->
 
 ### Changed
