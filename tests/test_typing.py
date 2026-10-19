@@ -46,6 +46,8 @@ def test_the_public_api_has_honest_types():
         # Markers are opaque: a user can pass them to factory_bot and nothing else.
         assert_type(sequence(lambda n: f"Book {n}"), object)
         assert_type(transient(3), object)
+        assert_type(sequence(lambda n: assert_type(n, int)), object)
+        assert_type(sequence(lambda n, title: f"{title}-{n}"), object)
         f.title = sequence(lambda n: f"Book {n}")
         f.copies = transient(3)
 

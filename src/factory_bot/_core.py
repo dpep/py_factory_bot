@@ -145,16 +145,20 @@ def _set_to_create(fn):
 
 
 # Markers are typed `object`: opaque, good only for handing back to factory_bot.
-def sequence(fn: Callable[[int], Any]) -> object:
-    """A value built from a counter that starts at 1, e.g. sequence(lambda n: f"user{n}")."""
-    try:
-        inspect.signature(fn).bind(1)
-    except TypeError:
+# The first overload keeps `lambda n:` inferred as `n: int`.
+@overload
+def sequence(fn: Callable[[int], Any], /) -> object: ...
+@overload
+def sequence(fn: Callable[..., Any], /) -> object: ...
+def sequence(fn: Callable[..., Any], /) -> object:
+    """A value built from a counter that starts at 1, e.g. sequence(lambda n: f"user{n}").
+
+    The counter comes first; other parameters are attributes, injected by name.
+    """
+    if not _takes_leading_argument(fn):
         raise FactoryError(
             f'sequence() takes a function of the counter, e.g. sequence(lambda n: f"user{{n}}"), not {fn!r}'
-        ) from None
-    except ValueError:  # no inspectable signature; trust it
-        pass
+        )
     return _Sequence(fn)
 
 
@@ -292,9 +296,6 @@ class _Sequence(_Marker):
     def reset(self):
         self.counter = itertools.count(1)
 
-    def next(self):
-        return self.fn(next(self.counter))
-
     def __repr__(self):
         return f"<sequence{_where(self.fn)}>"
 
@@ -374,7 +375,7 @@ class _Evaluator:
         if isinstance(value, _Transient):
             return self.evaluate(name, value.value)
         if isinstance(value, _Sequence):
-            return value.next()
+            return self.call(name, value.fn, next(value.counter))
         if isinstance(value, _Association):
             return self.associate(value, name)
         # A class is stored, not called: f.status = Status means the Enum itself.
