@@ -22,6 +22,17 @@ def test_any_callable_taking_kwargs_is_a_model():
     assert build("point") == {"x": 1, "y": 2}
 
 
+def test_a_plain_function_is_a_model_too():
+    def make_point(**kwargs):
+        return kwargs
+
+    @factory(make_point)
+    def point(f):
+        f.x = 1
+
+    assert build("point") == {"x": 1}
+
+
 def test_overrides_win_and_may_add_attributes():
     @factory(dict)
     def point(f):

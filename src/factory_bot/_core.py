@@ -35,7 +35,12 @@ def factory(model):
 
 
 def build(name, /, *traits, **overrides):
-    return _lookup(name).build(traits, overrides)
+    fac = _lookup(name)
+    return fac.model(**fac.attributes_for(traits, overrides))
+
+
+def attributes_for(name, /, *traits, **overrides):
+    return _lookup(name).attributes_for(traits, overrides)
 
 
 def sequence(fn):
@@ -67,10 +72,8 @@ class _Factory:
         self.traits = {}
         body(_Definition(self, self.attributes))
 
-    def build(self, traits, overrides):
-        return self.model(
-            **_Evaluator(self.name, self.definitions(traits), overrides).attributes()
-        )
+    def attributes_for(self, traits, overrides):
+        return _Evaluator(self.name, self.definitions(traits), overrides).attributes()
 
     def definitions(self, traits):
         definitions = dict(self.attributes)
