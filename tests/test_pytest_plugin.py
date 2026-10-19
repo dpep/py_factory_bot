@@ -87,6 +87,82 @@ def test_p_no_factory_bot_disables_the_plugin(suite):
     assert "factory_bot:" not in result.stdout.str()
 
 
+HOOKS_CONFTEST = """
+import pytest
+from factory_bot import to_create
+
+def at_import(obj): ...
+def in_fixture(obj): ...
+def in_session(obj): ...
+
+to_create(at_import)
+
+@pytest.fixture
+def leaky():
+    to_create(in_fixture)  # no teardown
+
+@pytest.fixture(scope="session")
+def session_hook():
+    to_create(in_session)  # no teardown
+"""
+
+HOOKS = """
+from factory_bot import _core, to_create
+
+def in_test(obj): ...
+
+def hook():
+    return _core._to_create.__name__
+
+def test_a_fixture(leaky):
+    print(f"test_a_fixture={hook()}")
+
+def test_b_body():
+    to_create(in_test)
+    print(f"test_b_body={hook()}")
+
+def test_c_after():
+    print(f"test_c_after={hook()}")
+
+def test_d_session(session_hook):
+    print(f"test_d_session={hook()}")
+
+def test_e_after_session():
+    print(f"test_e_after_session={hook()}")
+"""
+
+
+@pytest.fixture
+def hooks(pytester):
+    pytester.makeconftest(HOOKS_CONFTEST)
+    pytester.makepyfile(test_hooks=HOOKS)
+    return pytester
+
+
+def test_a_to_create_hook_set_by_a_test_or_its_function_fixtures_is_undone_after_it(
+    hooks,
+):
+    # A conftest's import-time hook is the baseline every test returns to.
+    data = names(run(hooks))
+    assert data["test_a_fixture"] == "in_fixture"
+    assert data["test_b_body"] == "in_test"
+    assert data["test_c_after"] == "at_import"
+
+
+def test_a_session_fixtures_to_create_hook_stays_while_the_session_fixture_does(hooks):
+    # The restore runs inside the higher-scoped fixtures, so they own their own teardown.
+    data = names(run(hooks))
+    assert data["test_d_session"] == "in_session"
+    assert data["test_e_after_session"] == "in_session"
+
+
+def test_p_no_factory_bot_leaves_the_to_create_hook_alone(hooks):
+    data = names(run(hooks, "-p", "no:factory_bot"))
+    assert data["test_a_fixture"] == "in_fixture"
+    assert data["test_b_body"] == "in_test"
+    assert data["test_c_after"] == "in_test"
+
+
 def test_pytest_randomly_seed_drives_the_data_too(suite):
     pytest.importorskip("pytest_randomly")
 

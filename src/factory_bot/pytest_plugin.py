@@ -1,8 +1,9 @@
-"""Reseed `fake` (and reset `fake.unique`) before each test; optionally reset sequences. Disable with -p no:factory_bot."""
+"""Reseed `fake` (and reset `fake.unique`) before each test, and undo a `to_create` hook the test
+set; optionally reset sequences. Disable with -p no:factory_bot."""
 
 import pytest
 
-from factory_bot import reset_sequences, seed
+from factory_bot import _core, reset_sequences, seed
 
 DEFAULT_SEED = 0
 
@@ -27,6 +28,15 @@ def pytest_runtest_setup(item):
     seed(f"{_seed(item.config)}:{item.nodeid}")
     if item.config.getini("factory_bot_reset_sequences"):
         reset_sequences()
+
+
+@pytest.fixture(autouse=True)
+def _factory_bot_restore_to_create():
+    # Function-scoped autouse runs after higher-scoped fixtures and before the test's own, so
+    # it undoes only what the test and its function fixtures set (say, a closed session).
+    hook = _core._to_create
+    yield
+    _core._set_to_create(hook)
 
 
 def _seed(config):
