@@ -39,7 +39,11 @@ class _Proxy:
 
     def __getattr__(self, attr):
         value = getattr(self._proxy, attr)
-        if attr in ("clear", "exclude_types") or not callable(value):
+        if attr == "exclude_types":
+            # Returns another UniqueProxy: guard it too, under the call as written.
+            prefix = f"{self._prefix}.exclude_types(...)"
+            return lambda *args, **kwargs: _Proxy(value(*args, **kwargs), prefix)
+        if attr == "clear" or not callable(value):
             return value
         return _guard(f"{self._prefix}.{attr}", value)
 

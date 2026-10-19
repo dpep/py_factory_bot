@@ -70,6 +70,17 @@ def test_unique_and_optional_calls_in_a_trait_name_the_call_written(proxy):
                 f.code = getattr(fake, proxy).random_int(min=1, max=9)
 
 
+def test_a_call_through_unique_exclude_types_names_the_call_written():
+    with pytest.raises(
+        FactoryError,
+        match=r"^Factory 'user': fake\.unique\.exclude_types\(\.\.\.\)\.first_name\(\) was called .* without parentheses: fake\.unique\.exclude_types\(\.\.\.\)\.first_name \(or",
+    ):
+
+        @factory(dict)
+        def user():
+            f.name = fake.unique.exclude_types([bool]).first_name()
+
+
 def test_the_uncalled_method_stays_lazy_and_keeps_its_signature():
     stored = {}
 
