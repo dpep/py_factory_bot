@@ -7,7 +7,7 @@ import weakref
 from collections.abc import Callable
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Generic, TypeVar, overload
 
 _registry: dict[str, "_Definition"] = {}
 _sequences: weakref.WeakSet["_Sequence"] = weakref.WeakSet()
@@ -39,32 +39,82 @@ class FactoryError(Exception):
         return f"Factory {self.factory!r}: {message}" if self.factory else message
 
 
-def build(name: str, /, *traits: str, **overrides: Any) -> Any:
-    return _run("build", name, traits, overrides)
+T = TypeVar("T")
+T_co = TypeVar("T_co", covariant=True)
 
 
-def create(name: str, /, *traits: str, **overrides: Any) -> Any:
-    return _run("create", name, traits, overrides)
+class Factory(Generic[T_co]):
+    """What @factory returns: pass it wherever a factory's name goes, and get its model's type back."""
+
+    __slots__ = ("name",)
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def __repr__(self) -> str:
+        return f"<Factory {self.name!r}>"
 
 
-def attributes_for(name: str, /, *traits: str, **overrides: Any) -> dict[str, Any]:
-    return _run("attributes_for", name, traits, overrides)
+@overload
+def build(factory: str, /, *traits: str, **overrides: Any) -> Any: ...
+@overload
+def build(factory: Factory[T], /, *traits: str, **overrides: Any) -> T: ...
+def build(factory: Any, /, *traits: str, **overrides: Any) -> Any:
+    return _run("build", factory, traits, overrides)
 
 
-def build_list(name: str, count: int, /, *traits: str, **overrides: Any) -> list[Any]:
-    return [build(name, *traits, **overrides) for _ in range(count)]
+@overload
+def create(factory: str, /, *traits: str, **overrides: Any) -> Any: ...
+@overload
+def create(factory: Factory[T], /, *traits: str, **overrides: Any) -> T: ...
+def create(factory: Any, /, *traits: str, **overrides: Any) -> Any:
+    return _run("create", factory, traits, overrides)
 
 
-def create_list(name: str, count: int, /, *traits: str, **overrides: Any) -> list[Any]:
-    return [create(name, *traits, **overrides) for _ in range(count)]
+def attributes_for(
+    factory: str | Factory[Any], /, *traits: str, **overrides: Any
+) -> dict[str, Any]:
+    return _run("attributes_for", factory, traits, overrides)
 
 
-def build_pair(name: str, /, *traits: str, **overrides: Any) -> list[Any]:
-    return build_list(name, 2, *traits, **overrides)
+@overload
+def build_list(
+    factory: str, count: int, /, *traits: str, **overrides: Any
+) -> list[Any]: ...
+@overload
+def build_list(
+    factory: Factory[T], count: int, /, *traits: str, **overrides: Any
+) -> list[T]: ...
+def build_list(factory: Any, count: int, /, *traits: str, **overrides: Any) -> Any:
+    return [build(factory, *traits, **overrides) for _ in range(count)]
 
 
-def create_pair(name: str, /, *traits: str, **overrides: Any) -> list[Any]:
-    return create_list(name, 2, *traits, **overrides)
+@overload
+def create_list(
+    factory: str, count: int, /, *traits: str, **overrides: Any
+) -> list[Any]: ...
+@overload
+def create_list(
+    factory: Factory[T], count: int, /, *traits: str, **overrides: Any
+) -> list[T]: ...
+def create_list(factory: Any, count: int, /, *traits: str, **overrides: Any) -> Any:
+    return [create(factory, *traits, **overrides) for _ in range(count)]
+
+
+@overload
+def build_pair(factory: str, /, *traits: str, **overrides: Any) -> list[Any]: ...
+@overload
+def build_pair(factory: Factory[T], /, *traits: str, **overrides: Any) -> list[T]: ...
+def build_pair(factory: Any, /, *traits: str, **overrides: Any) -> Any:
+    return build_list(factory, 2, *traits, **overrides)
+
+
+@overload
+def create_pair(factory: str, /, *traits: str, **overrides: Any) -> list[Any]: ...
+@overload
+def create_pair(factory: Factory[T], /, *traits: str, **overrides: Any) -> list[T]: ...
+def create_pair(factory: Any, /, *traits: str, **overrides: Any) -> Any:
+    return create_list(factory, 2, *traits, **overrides)
 
 
 def _set_to_create(fn):
@@ -87,12 +137,12 @@ def sequence(fn: Callable[[int], Any]) -> object:
     return _Sequence(fn)
 
 
-def association(name: str, /, *traits: str, **overrides: Any) -> Any:
+def association(factory: str | Factory[Any], /, *traits: str, **overrides: Any) -> Any:
     """Another factory's object, built or created along with this one.
 
     Called while a build is running (from a lazy attribute or callback), it builds now.
     """
-    marker = _Association(name, traits, overrides)
+    marker = _Association(_name_of(factory), traits, overrides)
     if building := _building.get():
         return building[-1].associate(marker)
     return marker
@@ -361,7 +411,8 @@ class _Evaluator:
         return _run(strategy, assoc.name, assoc.traits, assoc.overrides, (label, key))
 
 
-def _run(strategy, name, traits, overrides, via=None):
+def _run(strategy, factory, traits, overrides, via=None):
+    name = _name_of(factory)
     if _defining_factory() is not None:
         raise FactoryError(
             f"{strategy}({name!r}) ran while a factory was being defined, so it would run once, at import."
@@ -498,6 +549,17 @@ def _read_dependencies(fn, skip):
     return (
         tuple(p.name for p in required if p.kind is inspect.Parameter.POSITIONAL_ONLY),
         tuple(p.name for p in required if p.kind in keyword),
+    )
+
+
+def _name_of(factory):
+    if isinstance(factory, Factory):
+        return factory.name
+    if isinstance(factory, str):
+        return factory
+    raise FactoryError(
+        f"Expected a factory or a factory's name, not {factory!r}."
+        " If a fixture or variable shadows the factory, use its name or its module: factories.user"
     )
 
 

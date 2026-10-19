@@ -5,6 +5,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 from ._core import (
+    Factory,
     FactoryError,
     _defining_factory,
     _Definition,
@@ -15,10 +16,22 @@ from ._core import (
 )
 
 Body = TypeVar("Body", bound=Callable[[], object])
+T = TypeVar("T")
 Fn = TypeVar("Fn", bound=Callable[..., Any])
 
 
-def factory(model: Callable[..., Any], /) -> Callable[[Body], Body]:
+# A zero-argument function is a body, never a model: a model takes keyword arguments.
+@overload
+def factory(body: Callable[[], None], /) -> Factory[Any]: ...  # pyright: ignore[reportOverlappingOverload]
+@overload
+def factory(
+    model: type[dict[Any, Any]], /
+) -> Callable[[Callable[[], object]], Factory[dict[str, Any]]]: ...
+@overload
+def factory(
+    model: Callable[..., T], /
+) -> Callable[[Callable[[], object]], Factory[T]]: ...
+def factory(model: Any, /) -> Any:
     """@factory(User) registers a factory; nested in one, bare @factory declares a child."""
     if _is_body(model):
         _check_body(model, "factory")
@@ -26,7 +39,6 @@ def factory(model: Callable[..., Any], /) -> Callable[[Body], Body]:
             raise FactoryError(
                 f"@factory needs a model: write @factory(User) or @factory(dict) above def {model.__name__}"
             )
-        # Typed for @factory(Model); the bare nested form's return value is never used.
         return _define(model, None)
     return lambda body: _define(body, model)
 
@@ -45,7 +57,7 @@ def _define(body, model):
         parent.children.append(definition)
     else:
         _register(definition)
-    return body
+    return Factory(name)
 
 
 def trait(body: Body) -> Body:

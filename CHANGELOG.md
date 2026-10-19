@@ -26,6 +26,9 @@
 - `fake.x()` inside a factory or trait body is now an error: it ran once, at definition, so every build got the same value. Drop the parentheses (`f.name = fake.first_name`), or wrap a call with arguments in a lambda. `fake.unique.x()` and `fake.optional.x()` are caught too; calls in lambdas, callbacks and at module level are unchanged.
 - pytest plugin: a `to_create` hook set by a test or one of its function-scoped fixtures is undone after the test, so a fixture that sets it without teardown can no longer leak a closed session into later tests. A hook set at import (in a conftest) or by a session-, module- or class-scoped fixture stays: undo those in the fixture's own teardown.
 <!-- /lane -->
+<!-- lane: r2-core -->
+- `@factory(User)` returns the factory itself, a `Factory[User]`. Pass it wherever a factory's name goes, `build(user)` or `association(user)`, and a type checker knows the result is a `User`; a name still works and gives `Any`. Nothing to change: calling the old return value never worked.
+<!-- /lane -->
 
 ## 0.0.1 - 2026-10-18
 

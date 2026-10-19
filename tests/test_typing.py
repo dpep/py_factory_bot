@@ -3,11 +3,12 @@ at runtime assert_type is a no-op, so the test only proves the calls still work.
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, assert_type
+from typing import Any, TypedDict, assert_type
 
 from faker import Faker
 
 from factory_bot import (
+    Factory,
     after_build,
     after_create,
     association,
@@ -55,23 +56,42 @@ def test_the_public_api_has_honest_types():
 
         assert_type(signed, Callable[[], None])
 
-    assert_type(book, Callable[[], None])
+        @factory
+        def paperback() -> None:
+            f.title = "Paperback"
+
+        # The decorator never sees the parent, so a child can't know its model.
+        assert_type(paperback, Factory[Any])
+
+    assert_type(book, Factory[Book])
 
     @factory(dict)
     def shelf() -> None:
         # Inside a build, association() returns the built object, so it can't be a marker type.
         f.books = lambda: [association("book") for _ in range(2)]
-        f.first = association("book")
+        f.first = association(book)
 
-    assert_type(association("book"), Any)
+    assert_type(shelf, Factory[dict[str, Any]])
+    assert_type(build(shelf), dict[str, Any])
+    assert_type(build("shelf")["books"], Any)
+
+    # A name gives Any; the factory itself gives its model.
     assert_type(build("book"), Any)
     assert_type(create("book"), Any)
-    assert_type(attributes_for("book"), dict[str, Any])
     assert_type(build_list("book", 2), list[Any])
     assert_type(create_list("book", 2), list[Any])
     assert_type(build_pair("book"), list[Any])
     assert_type(create_pair("book"), list[Any])
-    assert_type(build("shelf")["books"], Any)
+    assert_type(build(book, "signed", title="x"), Book)
+    assert_type(create(book), Book)
+    assert_type(build_list(book, 2), list[Book])
+    assert_type(create_list(book, 2), list[Book])
+    assert_type(build_pair(book), list[Book])
+    assert_type(create_pair(book), list[Book])
+    assert_type(attributes_for(book), dict[str, Any])
+    assert_type(attributes_for("book"), dict[str, Any])
+    assert_type(association(book), Any)
+    assert_type(association("book"), Any)
 
     assert_type(to_create(None), None)
     assert_type(persist_with(_Session()), Callable[[object], None])
@@ -79,7 +99,59 @@ def test_the_public_api_has_honest_types():
     assert_type(seed(1), None)
 
 
-# Static only: decorators hand back what they were given, so a body or hook keeps its type.
+class Novel(Book):
+    pass
+
+
+class BookDict(TypedDict):
+    title: str
+
+
+def _make_book(**attrs: Any) -> Book:
+    return Book(**attrs)
+
+
+# Static only, from here down: these are never called.
+def _models_of_every_kind() -> None:
+    @factory(BookDict)
+    def book_dict() -> None:
+        f.title = "Dune"
+
+    @factory(_make_book)
+    def made() -> None:
+        f.title = "Dune"
+
+    assert_type(book_dict, Factory[BookDict])
+    assert_type(made, Factory[Book])
+
+
+def _handles_are_covariant(book: Factory[Book], novel: Factory[Novel], c: bool) -> None:
+    def takes(fac: Factory[Book]) -> Book:
+        return build(fac)
+
+    takes(novel)
+    assert_type(build(book if c else novel), Book)
+    assert_type(build(book if c else "book"), Book | Any)
+
+
+def _misuse_is_a_type_error(book: Factory[Book], untyped: Any) -> None:
+    # Each ignore must stay needed: an unneeded one fails the gate.
+    _n: int = build(book)  # pyright: ignore[reportAssignmentType]
+    build(Book)  # pyright: ignore[reportCallIssue, reportArgumentType]
+    _ = build(book).titel  # pyright: ignore[reportAttributeAccessIssue]
+    book()  # pyright: ignore[reportCallIssue]
+    book.build()  # pyright: ignore[reportAttributeAccessIssue]
+
+    # A model typed Any matches every overload, so pyright keeps the undecorated function:
+    # use the factory's name, or cast.
+    @factory(untyped)
+    def thing() -> None:
+        pass
+
+    build(thing)  # pyright: ignore[reportCallIssue, reportArgumentType]
+
+
+# Decorators hand back what they were given, so a body or hook keeps its type.
 def _decorators_keep_the_type(
     hook: Callable[[object], None], callback: Callable[[Book, int], None]
 ) -> None:
