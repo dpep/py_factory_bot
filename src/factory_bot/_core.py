@@ -1,9 +1,12 @@
 import copy
 import difflib
 import inspect
+import itertools
 import os
+import weakref
 
 _registry: dict[str, "_Factory"] = {}
+_sequences: weakref.WeakSet["_Sequence"] = weakref.WeakSet()
 
 
 class FactoryError(Exception):
@@ -35,8 +38,26 @@ def build(name, /, *traits, **overrides):
     return _lookup(name).build(overrides)
 
 
+def sequence(fn):
+    """A value built from a counter that starts at 1, e.g. sequence(lambda n: f"user{n}")."""
+    try:
+        inspect.signature(fn).bind(1)
+    except TypeError:
+        raise FactoryError(
+            f'sequence() takes a function of the counter, e.g. sequence(lambda n: f"user{{n}}"), not {fn!r}'
+        ) from None
+    except ValueError:  # no inspectable signature; trust it
+        pass
+    return _Sequence(fn)
+
+
 def clear_factories():
     _registry.clear()
+
+
+def reset_sequences():
+    for seq in _sequences:
+        seq.reset()
 
 
 class _Factory:
@@ -47,6 +68,19 @@ class _Factory:
 
     def build(self, overrides):
         return self.model(**_Evaluator(self, overrides).attributes())
+
+
+class _Sequence:
+    def __init__(self, fn):
+        self.fn = fn
+        self.reset()
+        _sequences.add(self)
+
+    def reset(self):
+        self.counter = itertools.count(1)
+
+    def next(self):
+        return self.fn(next(self.counter))
 
 
 class _Definition:
@@ -99,6 +133,8 @@ class _Evaluator:
         return self.values[name]
 
     def evaluate(self, name, value):
+        if isinstance(value, _Sequence):
+            return value.next()
         if callable(value):
             return value(
                 **{dep: self.get(dep, needed_by=name) for dep in _dependencies(value)}
