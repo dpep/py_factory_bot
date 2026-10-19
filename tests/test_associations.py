@@ -3,6 +3,7 @@ from support.models import Post, User
 
 from factory_bot import (
     FactoryError,
+    after_build,
     association,
     attributes_for,
     build,
@@ -10,6 +11,7 @@ from factory_bot import (
     f,
     factory,
     trait,
+    transient,
 )
 
 
@@ -96,3 +98,61 @@ def test_an_association_passed_as_an_override_follows_the_strategy(post_factory)
     assert not built.author.saved
     assert create("post", author=association("user")).author.saved
     assert attributes_for("post", author=association("user")) == {"title": "Hello"}
+
+
+@pytest.fixture
+def has_many_factory():
+    @factory(User)
+    def tag():
+        f.first_name = "red"
+
+    @factory(User)
+    def user():
+        f.n_tags = transient(1)
+        f.tags = lambda n_tags: [association("tag") for _ in range(n_tags)]
+
+    @factory(Post)
+    def post():
+        f.author = association("user", n_tags=2)
+
+
+def test_association_called_while_building_builds_with_the_current_strategy(
+    has_many_factory,
+):
+    assert [t.saved for t in build("user").tags] == [False]
+    assert [t.saved for t in create("user").tags] == [True]
+    assert [t.saved for t in attributes_for("user")["tags"]] == [False]
+
+
+def test_the_strategy_follows_through_nested_builds(has_many_factory):
+    assert [t.saved for t in build("post").author.tags] == [False, False]
+    assert [t.saved for t in create("post").author.tags] == [True, True]
+
+
+def test_association_called_in_a_callback_builds_with_the_current_strategy():
+    @factory(User)
+    def user():
+        pass
+
+    @factory(Post)
+    def post():
+        @after_build
+        def add_author(post):
+            post.author = association("user")
+
+    assert not build("post").author.saved
+    assert create("post").author.saved
+
+
+def test_an_unknown_association_called_while_building_names_the_attribute():
+    @factory(User)
+    def user():
+        f.tags = lambda: [association("tga")]
+
+    @factory(User)
+    def tag():
+        pass
+
+    message = r"^Factory 'user': 'tags' is an association to 'tga', which is not a factory\. Did you mean 'tag'\?$"
+    with pytest.raises(FactoryError, match=message):
+        build("user")

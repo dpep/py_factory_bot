@@ -4,11 +4,16 @@ import itertools
 import os
 import weakref
 from collections.abc import Callable
+from contextvars import ContextVar
 from typing import Any
 
 _registry: dict[str, "_Definition"] = {}
 _sequences: weakref.WeakSet["_Sequence"] = weakref.WeakSet()
 _to_create = None
+# The builds running right now, innermost last. Immutable, so a copied context never sees pushes.
+_building: ContextVar[tuple["_Evaluator", ...]] = ContextVar(
+    "factory_bot_building", default=()
+)
 
 
 class FactoryError(Exception):
@@ -63,8 +68,14 @@ def sequence(fn: Callable[[int], Any]) -> "_Sequence":
 
 
 def association(name: str, /, *traits: str, **overrides: Any) -> "_Association":
-    """Another factory's object, built or created along with this one."""
-    return _Association(name, traits, overrides)
+    """Another factory's object, built or created along with this one.
+
+    Called while a build is running (from a lazy attribute or callback), it builds now.
+    """
+    marker = _Association(name, traits, overrides)
+    if building := _building.get():
+        return building[-1].associate(marker)
+    return marker
 
 
 def transient(value: object) -> "_Transient":
@@ -220,7 +231,7 @@ class _Evaluator:
         if isinstance(value, _Sequence):
             return value.next()
         if isinstance(value, _Association):
-            return self.associate(name, value)
+            return self.associate(value, name)
         if callable(value):
             return self.call(name, value)
         return _fresh(value)
@@ -235,10 +246,12 @@ class _Evaluator:
                 )
         return fn(*leading, **{dep: self.get(dep) for dep in deps})
 
-    def associate(self, name, assoc):
+    def associate(self, assoc, name=None):
         if assoc.name not in _registry:
+            name = name or (self.resolving[-1] if self.resolving else None)
+            what = f"{name!r} is an association" if name else "an association"
             raise FactoryError(
-                f"Factory {self.factory_name!r}: {name!r} is an association to {assoc.name!r},"
+                f"Factory {self.factory_name!r}: {what} to {assoc.name!r},"
                 f" which is not a factory.{_suggest(assoc.name, _registry)}"
             )
         # attributes_for omits associations, but a dependent attribute may still need the object.
@@ -250,6 +263,14 @@ def _run(strategy, name, traits, overrides):
     fac = _lookup(name)
     layers = fac.layers(traits)
     evaluator = _Evaluator(strategy, fac.name, layers, overrides)
+    token = _building.set((*_building.get(), evaluator))
+    try:
+        return _construct(strategy, fac, layers, evaluator)
+    finally:
+        _building.reset(token)
+
+
+def _construct(strategy, fac, layers, evaluator):
     attributes = evaluator.attributes()
     if strategy == "attributes_for":
         return attributes
