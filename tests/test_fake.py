@@ -23,3 +23,10 @@ def test_seed_makes_fake_values_reproducible():
     first = [build("user") for _ in range(3)]
     seed(1234)
     assert [build("user") for _ in range(3)] == first
+
+
+def test_seed_resets_fake_unique_so_the_same_seed_gives_the_same_values():
+    seed(1234)
+    first = [fake.unique.random_int(1, 5) for _ in range(4)]
+    seed(1234)
+    assert [fake.unique.random_int(1, 5) for _ in range(4)] == first

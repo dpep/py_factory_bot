@@ -98,3 +98,27 @@ def test_pytest_randomly_seed_drives_the_data_too(suite):
     assert randomly(1) == randomly(1)
     assert randomly(1) != randomly(2)
     assert randomly(1, "test_data.py::test_b")["test_b"] == randomly(1)["test_b"]
+
+
+UNIQUE = """
+from factory_bot import fake
+
+def test_a():
+    print(f"test_a={[fake.unique.random_int(1, 5) for _ in range(4)]}")
+
+def test_b():
+    print(f"test_b={[fake.unique.random_int(1, 5) for _ in range(4)]}")
+"""
+
+
+def test_fake_unique_starts_fresh_each_test(pytester):
+    # Without a reset the second test exhausts the pool of five.
+    pytester.makepyfile(test_unique=UNIQUE)
+    together = names(run(pytester))
+    reversed_order = names(
+        run(pytester, "test_unique.py::test_b", "test_unique.py::test_a")
+    )
+    alone = names(run(pytester, "test_unique.py::test_b"))
+
+    assert reversed_order == together
+    assert alone["test_b"] == together["test_b"]

@@ -1,4 +1,4 @@
-"""Reseed `fake` before each test; optionally reset sequences. Disable with -p no:factory_bot."""
+"""Reseed `fake` (and reset `fake.unique`) before each test; optionally reset sequences. Disable with -p no:factory_bot."""
 
 import pytest
 
