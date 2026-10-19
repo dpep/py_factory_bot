@@ -9,11 +9,12 @@ from ._core import (
     create,
     create_list,
     lint,
+    persist_with,
     reset_sequences,
     sequence,
     transient,
 )
-from ._dsl import after_build, after_create, f, factory, persist_with, trait
+from ._dsl import after_build, after_create, f, factory, trait
 from ._fake import fake, seed
 
 __author__ = "dpepper"

@@ -7,7 +7,7 @@ import weakref
 from collections.abc import Callable
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Generic, Literal, TypeVar, overload
+from typing import Any, Generic, Literal, Protocol, TypeVar, overload
 
 _registry: dict[str, "_Definition"] = {}
 _sequences: weakref.WeakSet["_Sequence"] = weakref.WeakSet()
@@ -136,12 +136,6 @@ def lint(
         raise FactoryError(
             f"lint: {len(failures)} of {len(calls)} builds failed:{lines}"
         ) from ExceptionGroup("lint failures", [e for _, e in failures])
-
-
-def _set_persist_hook(fn):
-    global _persist_hook
-    _persist_hook = fn
-    return fn
 
 
 # Markers are typed `object`: opaque, good only for handing back to factory_bot.
@@ -518,6 +512,68 @@ def _note_unknown_keywords(e, evaluator, attributes):
                 f"{name!r}: deep overrides aren't supported."
                 f' Override the association instead: {head}=association("{target}", {rest}=...)'
             )
+
+
+class _Session(Protocol):
+    """A SQLAlchemy Session or scoped_session, duck-typed so factory_bot never imports SQLAlchemy."""
+
+    def add(self, instance: Any, /) -> object: ...
+    def flush(self) -> object: ...
+
+
+S = TypeVar("S", bound=_Session)
+Fn = TypeVar("Fn", bound=Callable[..., Any])
+
+
+# A session before a function: scoped_session is callable too.
+@overload
+def persist_with(hook: None, /) -> None: ...
+@overload
+def persist_with(hook: S, /) -> S: ...
+@overload
+def persist_with(hook: Fn, /) -> Fn: ...
+def persist_with(hook, /):
+    """Save every created object with hook(obj), or session.add(obj) + flush(), instead of obj.save().
+
+    The session is never committed, so the test's transaction still decides. persist_with(None)
+    restores obj.save().
+    """
+    if _stack.get():
+        raise FactoryError(
+            "persist_with() sets the global save hook, so call it outside any factory body, e.g. in a fixture."
+        )
+    if _is_session(hook):
+        _set_persist_hook(lambda obj: _add_and_flush(hook, obj))
+    elif _is_session(
+        getattr(hook, "class_", None)
+    ):  # callable, so it would pass as a hook
+        raise FactoryError(
+            "persist_with() takes a session, not a sessionmaker."
+            " Pass the test's session, e.g. persist_with(session)."
+        )
+    elif hook is None or callable(hook):
+        _set_persist_hook(hook)
+    else:
+        raise FactoryError(
+            "persist_with() takes a function, a SQLAlchemy session, or None to restore obj.save();"
+            f" got {hook!r}."
+        )
+    return hook
+
+
+# The seam the pytest plugin reads and restores the hook through.
+def _set_persist_hook(fn):
+    global _persist_hook
+    _persist_hook = fn
+
+
+def _is_session(obj):
+    return hasattr(obj, "add") and hasattr(obj, "flush")
+
+
+def _add_and_flush(session, obj):
+    session.add(obj)
+    session.flush()
 
 
 def _persist(evaluator, obj):
