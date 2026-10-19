@@ -470,18 +470,34 @@ def _source(value):
     return value.fn if isinstance(value, _Sequence) else value
 
 
+# Reading a signature costs more than the rest of a build, and a callable's never changes.
+_dependency_cache: weakref.WeakKeyDictionary[Any, dict[int, Any]] = (
+    weakref.WeakKeyDictionary()
+)
+
+
 def _dependencies(fn, skip=0):
     """Names of fn's required parameters: (positional-only, the rest)."""
+    try:
+        by_skip = _dependency_cache.setdefault(fn, {})
+    except TypeError:  # unhashable, or no weak reference (most builtins)
+        return _read_dependencies(fn, skip)
+    if skip not in by_skip:
+        by_skip[skip] = _read_dependencies(fn, skip)
+    return by_skip[skip]
+
+
+def _read_dependencies(fn, skip):
     # Only required params: fake.paragraph(nb_sentences=3) must not be injected.
     try:
         params = list(inspect.signature(fn).parameters.values())[skip:]
     except (TypeError, ValueError):  # some builtins (dict, str) have no signature
-        return [], []
+        return (), ()
     required = [p for p in params if p.default is p.empty]
     keyword = (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
     return (
-        [p.name for p in required if p.kind is inspect.Parameter.POSITIONAL_ONLY],
-        [p.name for p in required if p.kind in keyword],
+        tuple(p.name for p in required if p.kind is inspect.Parameter.POSITIONAL_ONLY),
+        tuple(p.name for p in required if p.kind in keyword),
     )
 
 

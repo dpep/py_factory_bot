@@ -1,3 +1,4 @@
+import inspect
 import itertools
 import re
 
@@ -161,3 +162,28 @@ def test_a_marker_returned_by_a_function_is_an_error(returns, strategy):
         r"while building factory 'user', attribute 'name' \(test_lazy\.py:\d+\)",
         excinfo.value.__notes__[0],
     )
+
+
+def test_a_callables_parameters_are_read_once_across_builds(monkeypatch):
+    class Stamp:
+        __slots__ = ()  # no weak reference, so it can't be cached
+
+        def __call__(self):
+            return 1
+
+    email, stamp = lambda first_name: f"{first_name}@x.io", Stamp()
+    read = []
+    signature = inspect.signature
+    monkeypatch.setattr(
+        inspect, "signature", lambda fn: read.append(fn) or signature(fn)
+    )
+
+    @factory(dict)
+    def user():
+        f.first_name = "Ann"
+        f.email = email
+        f.stamp = stamp
+
+    for _ in range(3):
+        assert build("user") == {"first_name": "Ann", "email": "Ann@x.io", "stamp": 1}
+    assert (read.count(email), read.count(stamp)) == (1, 3)
