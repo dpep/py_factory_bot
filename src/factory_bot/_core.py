@@ -583,6 +583,23 @@ def _name_of(factory):
     )
 
 
+def _takes_leading_argument(fn):
+    """Whether fn takes a first positional argument, ahead of the dependencies injected by name:
+    a callback's instance, a sequence's counter."""
+    if not callable(fn):
+        return False
+    try:
+        params = inspect.signature(fn).parameters.values()
+    except ValueError:  # no inspectable signature; trust it
+        return True
+    first = next(iter(params), None)
+    return first is not None and first.kind in (
+        first.POSITIONAL_ONLY,
+        first.POSITIONAL_OR_KEYWORD,
+        first.VAR_POSITIONAL,
+    )
+
+
 def _lookup(name):
     if name not in _registry:
         raise FactoryError(f"No factory named {name!r}.{_suggest(name, _registry)}")

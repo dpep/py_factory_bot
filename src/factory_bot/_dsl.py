@@ -12,6 +12,7 @@ from ._core import (
     _register,
     _set_to_create,
     _stack,
+    _takes_leading_argument,
     _where,
 )
 
@@ -179,7 +180,7 @@ def _callback(kind: str) -> Callable[[Fn], Fn]:
         name = getattr(fn, "__name__", None)  # a partial or callable object has none
         what = f"@{kind} def {name}" if name else f"@{kind} {fn!r}"
         owner = _current(what, kinds=("factory", "trait"))
-        if not _takes_instance_first(fn):
+        if not _takes_leading_argument(fn):
             factory_name = _defining_factory()
             shown = f"{what}{inspect.signature(fn)}" if name and callable(fn) else what
             raise FactoryError(
@@ -192,21 +193,6 @@ def _callback(kind: str) -> Callable[[Fn], Fn]:
     decorate.__name__ = decorate.__qualname__ = kind
     decorate.__doc__ = f"Run fn(instance, **dependencies) {kind.replace('_', ' ')}; dependencies are injected by name."
     return decorate
-
-
-def _takes_instance_first(fn):
-    if not callable(fn):
-        return False
-    try:
-        params = inspect.signature(fn).parameters.values()
-    except ValueError:  # no inspectable signature; trust it
-        return True
-    first = next(iter(params), None)
-    return first is not None and first.kind in (
-        first.POSITIONAL_ONLY,
-        first.POSITIONAL_OR_KEYWORD,
-        first.VAR_POSITIONAL,
-    )
 
 
 after_build = _callback("after_build")
