@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
 from support.sa_models import Author, Base, Book
 
-from factory_bot import association, create, create_list, factory, to_create
+from factory_bot import association, create, create_list, f, factory, to_create
 from factory_bot.sqlalchemy import persist_with
 
 
@@ -46,11 +46,11 @@ def session(engine):
 @pytest.fixture(autouse=True)
 def book_factory():
     @factory(Author)
-    def author(f):
+    def author():
         f.name = "Ann"
 
     @factory(Book)
-    def book(f):
+    def book():
         f.title = "Dune"
         f.author = association("author")
 

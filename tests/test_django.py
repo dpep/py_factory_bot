@@ -8,16 +8,16 @@ setup()
 from django.test import TestCase
 from support.django_app.models import Author, Book
 
-from factory_bot import association, create, create_list, factory
+from factory_bot import association, create, create_list, f, factory
 
 
 def define_factories():
     @factory(Author)
-    def author(f):
+    def author():
         f.name = "Ann"
 
     @factory(Book)
-    def book(f):
+    def book():
         f.title = "Dune"
         f.author = association("author")
 
