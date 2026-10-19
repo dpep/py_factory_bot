@@ -1,8 +1,9 @@
 import inspect
+import re
 
 import pytest
 
-from factory_bot import FactoryError, f
+from factory_bot import FactoryError, association, f, sequence, transient
 
 pytest_plugins = ["pytester"]
 
@@ -34,3 +35,11 @@ def double(x):
     )
     result = pytester.runpytest_subprocess("--doctest-modules", "-p", "no:randomly")
     result.assert_outcomes(passed=1)
+
+
+def test_markers_show_what_they_declare():
+    assert repr(association("author", "admin", name="A")) == "<association 'author'>"
+    assert repr(transient([1])) == "<transient [1]>"
+    assert re.fullmatch(
+        r"<sequence \(test_introspection\.py:\d+\)>", repr(sequence(lambda n: n))
+    )

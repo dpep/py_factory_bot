@@ -179,15 +179,24 @@ class _Sequence(_Marker):
     def next(self):
         return self.fn(next(self.counter))
 
+    def __repr__(self):
+        return f"<sequence{_where(self.fn)}>"
+
 
 class _Association(_Marker):
     def __init__(self, name, traits, overrides):
         self.name, self.traits, self.overrides = name, traits, overrides
 
+    def __repr__(self):
+        return f"<association {self.name!r}>"
+
 
 class _Transient(_Marker):
     def __init__(self, value):
         self.value = value
+
+    def __repr__(self):
+        return f"<transient {self.value!r}>"
 
 
 class _Given:
