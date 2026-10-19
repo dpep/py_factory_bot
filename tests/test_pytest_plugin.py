@@ -57,10 +57,10 @@ def test_the_seed_is_in_the_header(suite):
 
 
 SEQUENCES = """
-from factory_bot import build, factory, sequence
+from factory_bot import build, f, factory, sequence
 
 @factory(dict)
-def user(f):
+def user():
     f.username = sequence(lambda n: f"user{n}")
 
 def test_a():
