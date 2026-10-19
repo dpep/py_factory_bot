@@ -32,7 +32,7 @@ def names(result):
 
 
 def run(pytester, *args):
-    result = pytester.runpytest_subprocess("-s", "-p", "no:randomly", *args)
+    result = pytester.runpytest("-s", "-p", "no:randomly", *args)
     result.assert_outcomes(passed=len(names(result)))
     return result
 
@@ -91,7 +91,7 @@ def test_pytest_randomly_seed_drives_the_data_too(suite):
     pytest.importorskip("pytest_randomly")
 
     def randomly(seed, *args):
-        result = suite.runpytest_subprocess("-s", f"--randomly-seed={seed}", *args)
+        result = suite.runpytest("-s", f"--randomly-seed={seed}", *args)
         result.stdout.fnmatch_lines([f"factory_bot: seed={seed} (--randomly-seed)"])
         return names(result)
 

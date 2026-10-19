@@ -33,7 +33,7 @@ def double(x):
     return 2 * x
 '''
     )
-    result = pytester.runpytest_subprocess("--doctest-modules", "-p", "no:randomly")
+    result = pytester.runpytest("--doctest-modules", "-p", "no:randomly")
     result.assert_outcomes(passed=1)
 
 
