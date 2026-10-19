@@ -156,7 +156,6 @@ class _Definition:
         self.traits: dict[str, _Definition] = {}
         self.children: list[_Definition] = []
         self.callbacks = {"after_build": [], "after_create": []}
-        self.to_create = None
 
     # Walked at build time, not definition time: a child is defined while its
     # parent's body is still running, so later parent attributes must still reach it.
@@ -193,9 +192,6 @@ class _Definition:
             },
             declared={n for layer in layers for n in layer.attributes},
             model=next(d.model for d in reversed(lineage) if d.model),
-            to_create=next(
-                (d.to_create for d in reversed(lineage) if d.to_create), None
-            ),
             callbacks={
                 kind: [cb for layer in layers for cb in layer.callbacks[kind]]
                 for kind in self.callbacks
@@ -218,8 +214,6 @@ class _Plan:
     # What the factory and its traits declare, overrides aside.
     declared: set[str]
     model: Callable[..., Any]
-    # The nearest factory's hook. None defers to the global one, read when saving.
-    to_create: Callable[[Any], Any] | None
     # By kind, in layer order.
     callbacks: dict[str, list[Callable[..., Any]]]
 
@@ -429,7 +423,7 @@ def _construct(strategy, plan, evaluator):
     _run_callbacks(evaluator, plan.callbacks["after_build"], obj)
     if strategy == "create":
         try:
-            _persist(evaluator, plan.to_create or _to_create, obj)
+            _persist(evaluator, obj)
         except Exception as e:
             evaluator.note(e, verb="saving")
             raise
@@ -468,14 +462,14 @@ def _note_unknown_keywords(e, evaluator, attributes):
             )
 
 
-def _persist(evaluator, hook, obj):
-    if hook:
-        hook(obj)
+def _persist(evaluator, obj):
+    if _to_create:
+        _to_create(obj)
         return
     if not hasattr(obj, "save"):
         raise evaluator.error(
             f"can't create a {type(obj).__name__}: it has no save()."
-            " Give it a save() method, or set a hook with to_create(fn), at top level or inside the factory."
+            " Give it a save() method, or set a global hook with to_create(fn)."
         )
     obj.save()
 

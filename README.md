@@ -234,25 +234,23 @@ build_list("user", 3, "admin")  # three users; create_list saves each
 
 `create` builds the object, then saves it. By default that means calling `obj.save()`, which is all a Django model needs: there's nothing to configure.
 
-For anything else, set a hook with `to_create(fn)`. At top level it applies to every factory, across the whole process; `to_create(None)` puts `obj.save()` back. Inside a factory body it applies to that factory and its children.
+For anything else, set a hook with `to_create(fn)`. At top level it applies to every factory, across the whole process; `to_create(None)` puts `obj.save()` back.
 
 ```python
 from factory_bot import to_create
 
 saved = []
+to_create(saved.append)
 
 
 @factory(dict)
 def event():
     f.name = "launch"
 
-    @to_create
-    def store(obj):
-        saved.append(obj)
-
 
 create("event")
 assert saved == [{"name": "launch"}]
+to_create(None)
 ```
 
 For SQLAlchemy, `persist_with(session)` adds each created object to the session and flushes, so ids and foreign keys are set but nothing is committed: your test's transaction still decides.

@@ -198,7 +198,7 @@ assert attributes_for("essay") == {"byline": "by Ann"}
 
 A callback's first parameter is the object, whatever you name it; the rest are filled by name, like a lazy attribute, and may name transients. Callbacks can live in a factory, a child or a trait, and run in that order: parent, child, then each trait in the order listed. `after_build` runs on `create` too, before the save, which is where anything that must be saved with the row belongs.
 
-`create` saves with the nearest hook it finds: a `@to_create` in the factory or one of its parents, then the global `to_create(fn)`, then `obj.save()`. The global hook is one setting for the whole process, not per thread.
+`create` saves with the global `to_create(fn)` hook if one is set, otherwise `obj.save()`. The hook is one setting for the whole process, not per thread.
 
 
 ## Organizing factories
@@ -520,7 +520,7 @@ Every `FactoryError` names the factory involved, and most suggest the fix. The o
 
 - `Factory 'member': @factory def moderator must be directly inside the factory, not inside trait 'admin'`
 
-  Child factories, traits and `@to_create` belong in a factory body, not in a trait.
+  Child factories and traits belong in a factory body, not in a trait.
 
 - `def member(f) takes no parameters: drop the parameter and import f (from factory_bot import f), and write @trait instead of @f.trait`
 
@@ -530,7 +530,7 @@ Every `FactoryError` names the factory involved, and most suggest the fix. The o
 
   Checked at build time, so an association's factory may be defined after the one that uses it.
 
-- `Factory 'user': can't create a dict: it has no save(). Give it a save() method, or set a hook with to_create(fn), at top level or inside the factory.`
+- `Factory 'user': can't create a dict: it has no save(). Give it a save() method, or set a global hook with to_create(fn).`
 
   `create` needs to know how to save. Django models have `save()`; for SQLAlchemy, use `persist_with`. If this appears in a test that should have a database, the fixture that sets the hook didn't run.
 
@@ -558,7 +558,7 @@ Defining:
 | `association("name", *traits, **overrides)` | Another factory's object. |
 | `transient(value)` | An input that never reaches the model. |
 | `@after_build`, `@after_create` | Callbacks: `fn(obj, **dependencies)`. |
-| `to_create(fn)` | Save hook: in a body for that factory and its children, at top level for all; `to_create(None)` restores `obj.save()`. |
+| `to_create(fn)` | The global save hook; `to_create(None)` restores `obj.save()`. |
 
 Using, each taking `(name, *traits, **overrides)`:
 

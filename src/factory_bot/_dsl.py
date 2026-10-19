@@ -79,16 +79,12 @@ def to_create(fn: None, /) -> None: ...
 @overload
 def to_create(fn: Fn, /) -> Fn: ...
 def to_create(fn, /):
-    """Persist created objects with fn(obj) instead of obj.save().
-
-    Inside a factory body it sets that factory's hook (children inherit it); at top level
-    it sets the global one, and to_create(None) restores obj.save().
-    """
+    """Persist every created object with fn(obj) instead of obj.save(); to_create(None) restores it."""
     if _stack.get():
-        _current("to_create").to_create = fn
-    else:
-        _set_to_create(fn)
-    return fn
+        raise FactoryError(
+            "to_create(fn) sets the global save hook, so call it outside any factory body, e.g. in a fixture."
+        )
+    return _set_to_create(fn)
 
 
 class _ReadError(FactoryError, AttributeError):

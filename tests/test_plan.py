@@ -12,7 +12,6 @@ from factory_bot import (
     f,
     factory,
     sequence,
-    to_create,
     trait,
     transient,
 )
@@ -24,14 +23,6 @@ class Robot:
     name: str = ""
 
 
-def save_user(user):
-    pass
-
-
-def save_robot(robot):
-    pass
-
-
 @pytest.fixture(autouse=True)
 def factories():
     @factory(dict)
@@ -41,7 +32,6 @@ def factories():
         f.code = transient(0)
         f.n = sequence(lambda n: n)
         f.boss = association("user")
-        to_create(save_user)
 
         @after_build
         def stamp(user):
@@ -78,7 +68,7 @@ def factories():
 
         @factory(Robot)
         def robot():
-            to_create(save_robot)
+            pass
 
     @factory(dict)
     def plain():
@@ -103,7 +93,6 @@ def project(plan):
         "transients": plan.transients,
         "declared": plan.declared,
         "model": plan.model,
-        "to_create": plan.to_create,
         "callbacks": {k: [cb.__name__ for cb in v] for k, v in plan.callbacks.items()},
     }
 
@@ -126,7 +115,6 @@ ROWS = {
             "transients": {"code"},
             "declared": set(USER),
             "model": dict,
-            "to_create": save_user,
             "callbacks": {"after_build": ["stamp"], "after_create": []},
         },
     ),
@@ -221,24 +209,8 @@ ROWS = {
             "callbacks": {"after_build": ["stamp"], "after_create": []},
         },
     ),
-    "a child inherits the nearest model and hook": (
-        "guest",
-        (),
-        {},
-        {"model": dict, "to_create": save_user},
-    ),
-    "a child's own model and hook win": (
-        "robot",
-        (),
-        {},
-        {"model": Robot, "to_create": save_robot},
-    ),
-    "no hook in the lineage defers to the global one": (
-        "plain",
-        (),
-        {},
-        {"to_create": None},
-    ),
+    "a child inherits the nearest model": ("guest", (), {}, {"model": dict}),
+    "a child's own model wins": ("robot", (), {}, {"model": Robot}),
 }
 
 
