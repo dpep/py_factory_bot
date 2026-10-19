@@ -91,18 +91,9 @@ assert build("job", on_done=notify)["on_done"] is notify  # overrides are never 
 
 The value rule is short, but four of its consequences catch almost everyone once.
 
-### `fake.first_name()` with parentheses gives everyone the same name
+### `fake.first_name()` with parentheses is an error
 
-The parentheses call it right away, while the body runs, so the factory records one string and hands it to every build.
-
-```python
-@factory(dict)
-def guest():
-    f.name = fake.first_name()  # called once, at definition
-
-
-assert build("guest")["name"] == build("guest")["name"]  # the same name every time
-```
+The parentheses would call it right away, while the body runs, so the factory would record one string and hand it to every build. factory_bot raises a `FactoryError` instead: `fake.first_name() was called while the factory was being defined`.
 
 Drop the parentheses so the method itself is the value, or wrap a call that needs arguments in a lambda: `f.age = lambda: fake.random_int(min=18, max=90)`.
 

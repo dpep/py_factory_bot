@@ -22,6 +22,9 @@
 - A `FactoryError` raised while a factory's body runs or while it builds names that factory, the innermost one when builds nest. `f.book = lambda: build("nope")` now says `Factory 'shelf': No factory named 'nope'.` Like other exceptions, it also gains a note from each build it passes through, so a failure deep in an association shows the attributes that led to it.
 - `build(...)`, `create(...)` or `attributes_for(...)` called directly in a factory body is now an error: it ran once at definition time, so every build shared one object. Use `association("user")`, which builds or creates to match the parent, or wrap it in a lambda (`f.author = lambda: build("user")`).
 - "Factory 'user' is already defined" shows the first definition's full path, and points at `clear_factories()` for redefining in a REPL or after a reload.
+<!-- lane: r2-fake -->
+- `fake.x()` inside a factory or trait body is now an error: it ran once, at definition, so every build got the same value. Drop the parentheses (`f.name = fake.first_name`), or wrap a call with arguments in a lambda. `fake.unique.x()` and `fake.optional.x()` are caught too; calls in lambdas, callbacks and at module level are unchanged.
+<!-- /lane -->
 
 ## 0.0.1 - 2026-10-18
 
