@@ -93,6 +93,7 @@ def project(plan):
         "transients": plan.transients,
         "declared": plan.declared,
         "model": plan.model,
+        "replaced": plan.replaced,
         "callbacks": {k: [cb.__name__ for cb in v] for k, v in plan.callbacks.items()},
     }
 
@@ -208,6 +209,18 @@ ROWS = {
             },
             "callbacks": {"after_build": ["stamp"], "after_create": []},
         },
+    ),
+    "an override <name>_id replaces association <name>": (
+        "user",
+        (),
+        {"boss_id": 1, "name_id": 2},
+        {"replaced": {"boss": "boss_id"}},
+    ),
+    "passing <name> too replaces nothing": (
+        "user",
+        (),
+        {"boss_id": 1, "boss": None},
+        {"replaced": {}},
     ),
     "a child inherits the nearest model": ("guest", (), {}, {"model": dict}),
     "a child's own model wins": ("robot", (), {}, {"model": Robot}),

@@ -38,6 +38,12 @@ class CreateTests(TestCase):
         with pytest.raises(ValueError, match="unsaved related object"):
             Book(title="Orphan", author=Author(name="Bea")).save()
 
+    def test_an_id_override_makes_no_spare_author(self):
+        ann = Author.objects.create(name="Ann")
+        book = create("book", author_id=ann.pk)
+        assert Author.objects.count() == 1
+        assert Book.objects.get(pk=book.pk).author == ann
+
     def test_create_list_saves_each(self):
         create_list("book", 3)
         assert Book.objects.count() == Author.objects.count() == 3

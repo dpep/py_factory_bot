@@ -30,6 +30,7 @@
 - Breaking: a class assigned as a value is stored, not called on each build, so `f.status = Status` gives the `Enum` class and `f.kind = Decimal` gives `Decimal`. If you relied on a class being instantiated per build, write `lambda: SomeClass()`. Other callables are still called.
 - `lint(*factories, strategy="build", traits=True)` builds every factory (or those given) once, then once with each of its traits, inherited ones included, and raises one `FactoryError` listing every call that failed, as a call you can paste into a test; the original exceptions are chained as an `ExceptionGroup`. Its builds are real: they use up sequence numbers and `fake.unique` values, and `strategy="create"` saves rows, so run it inside a test.
 - A sequence's function gets the counter first, whatever the parameter is called, then other attributes by name, as a callback gets the instance first: `f.slug = sequence(lambda n, title: f"{slugify(title)}-{n}")`.
+- Passing `<name>_id=` instead of `<name>=` skips the `<name>` association, and the `_id` still reaches the model: `create("book", author_id=a.id)` no longer makes a spare author (which under SQLAlchemy silently replaced the id you passed). Only for an attribute declared as `association(...)`; passing both passes both. If a test relied on the spare row, pass `<name>=` too. An attribute or callback that depends on `<name>` then raises, saying `<name>_id=` replaced it.
 <!-- /lane -->
 
 ## 0.0.1 - 2026-10-18

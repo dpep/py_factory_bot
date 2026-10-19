@@ -226,9 +226,10 @@ class _Definition:
             n: v if isinstance(v, _Marker) else _Given(v) for n, v in overrides.items()
         }
         values = [*(layer.attributes for layer in layers), given]
+        definitions = {n: v for layer in values for n, v in layer.items()}
         return _Plan(
             factory=self.name,
-            definitions={n: v for layer in values for n, v in layer.items()},
+            definitions=definitions,
             transients={
                 n
                 for layer in values
@@ -236,6 +237,13 @@ class _Definition:
                 if isinstance(v, _Transient)
             },
             declared={n for layer in layers for n in layer.attributes},
+            replaced={
+                key[:-3]: key
+                for key in overrides
+                if key.endswith("_id")
+                and key[:-3] not in overrides
+                and isinstance(definitions.get(key[:-3]), _Association)
+            },
             model=next(d.model for d in reversed(lineage) if d.model),
             callbacks={
                 kind: [cb for layer in layers for cb in layer.callbacks[kind]]
@@ -258,6 +266,8 @@ class _Plan:
     transients: set[str]
     # What the factory and its traits declare, overrides aside.
     declared: set[str]
+    # Associations not made because an override gave their `<name>_id`: name -> that key.
+    replaced: dict[str, str]
     model: Callable[..., Any]
     # By kind, in layer order.
     callbacks: dict[str, list[Callable[..., Any]]]
@@ -339,7 +349,7 @@ class _Evaluator:
         return {name: self.get(name) for name in names if self.exposes(name)}
 
     def exposes(self, name):
-        if name in self.plan.transients:
+        if name in self.plan.transients or name in self.plan.replaced:
             return False
         return not (
             self.strategy == "attributes_for"
@@ -397,6 +407,11 @@ class _Evaluator:
     def call(self, name, fn, *leading):
         positional, keyword = _dependencies(fn, skip=len(leading))
         for dep in [*positional, *keyword]:
+            if dep in self.plan.replaced:
+                raise self.error(
+                    f"{name!r} depends on {dep!r}, which isn't made because {self.plan.replaced[dep]}= was given."
+                    f" Pass {dep}= as well."
+                )
             if dep not in self.plan.definitions:
                 raise self.error(
                     f"{name!r} depends on {dep!r}, which is not defined."

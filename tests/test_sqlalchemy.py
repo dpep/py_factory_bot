@@ -79,6 +79,15 @@ def test_associations_are_flushed_before_the_rows_that_reference_them(session):
     assert book.author_id == book.author.id
 
 
+def test_an_id_override_makes_no_spare_author(session):
+    ann = create("author")
+    book = create("book", author_id=ann.id)
+    assert count(session, Author) == 1
+    assert book.author_id == ann.id
+    session.expire(book)
+    assert book.author is ann
+
+
 def test_the_fk_constraint_is_really_enforced(session):
     with pytest.raises(IntegrityError):
         session.execute(insert(Book).values(title="Orphan", author_id=999))

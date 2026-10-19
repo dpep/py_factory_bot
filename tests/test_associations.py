@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from support.models import Post, User
 
@@ -10,6 +12,7 @@ from factory_bot import (
     create,
     f,
     factory,
+    to_create,
     trait,
     transient,
 )
@@ -179,3 +182,76 @@ def test_an_association_that_overrides_its_way_out_is_not_a_cycle():
         f.parent = lambda depth: association("node", depth=depth - 1) if depth else None
 
     assert build("node") == {"parent": {"parent": {"parent": None}}}
+
+
+@pytest.fixture
+def books():
+    made = []
+
+    @factory(dict)
+    def author():
+        f.name = "Ann"
+
+        @after_build
+        def count(author):
+            made.append(author)
+
+    @factory(dict)
+    def book():
+        f.title = "Dune"
+        f.author = association("author")
+
+    return made
+
+
+def test_an_id_override_skips_the_association_and_reaches_the_model(books):
+    to_create(lambda obj: None)
+    for strategy in (build, create, attributes_for):
+        assert strategy("book", author_id=7) == {"title": "Dune", "author_id": 7}
+    assert books == []
+
+
+def test_passing_both_passes_both(books):
+    assert build("book", author="a", author_id=7) == {
+        "title": "Dune",
+        "author": "a",
+        "author_id": 7,
+    }
+
+
+def test_an_id_override_of_a_plain_attribute_changes_nothing():
+    @factory(dict)
+    def book():
+        f.author = "Ann"
+
+    assert build("book", author_id=7) == {"author": "Ann", "author_id": 7}
+
+
+def test_an_id_override_skips_an_association_a_trait_declares():
+    @factory(dict)
+    def author():
+        f.name = "Ann"
+
+    @factory(dict)
+    def book():
+        f.author = None
+
+        @trait
+        def authored():
+            f.author = association("author")
+
+    assert build("book", "authored", author_id=7) == {"author_id": 7}
+
+
+def test_a_dependent_of_a_skipped_association_says_why(books):
+    @factory(dict)
+    def signed():
+        f.author = association("author")
+        f.byline = lambda author: author["name"]
+
+    message = (
+        "Factory 'signed': 'byline' depends on 'author', which isn't made because author_id= was given."
+        " Pass author= as well."
+    )
+    with pytest.raises(FactoryError, match=f"^{re.escape(message)}"):
+        build("signed", author_id=7)
