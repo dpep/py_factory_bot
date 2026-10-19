@@ -101,22 +101,6 @@ def create_list(factory: Any, count: int, /, *traits: str, **overrides: Any) -> 
     return [create(factory, *traits, **overrides) for _ in range(count)]
 
 
-@overload
-def build_pair(factory: str, /, *traits: str, **overrides: Any) -> list[Any]: ...
-@overload
-def build_pair(factory: Factory[T], /, *traits: str, **overrides: Any) -> list[T]: ...
-def build_pair(factory: Any, /, *traits: str, **overrides: Any) -> Any:
-    return build_list(factory, 2, *traits, **overrides)
-
-
-@overload
-def create_pair(factory: str, /, *traits: str, **overrides: Any) -> list[Any]: ...
-@overload
-def create_pair(factory: Factory[T], /, *traits: str, **overrides: Any) -> list[T]: ...
-def create_pair(factory: Any, /, *traits: str, **overrides: Any) -> Any:
-    return create_list(factory, 2, *traits, **overrides)
-
-
 def _set_to_create(fn):
     global _to_create
     _to_create = fn

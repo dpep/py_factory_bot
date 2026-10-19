@@ -3,7 +3,7 @@
 ## Unreleased
 
 - `create` builds and then saves: `obj.save()` by default, or a global hook set with `to_create(fn)`.
-- `build_list` / `create_list` / `build_pair` / `create_pair`.
+- `build_list` / `create_list`.
 - `association("user", *traits, **overrides)` builds or creates another factory's object to match the parent; `attributes_for` leaves it out.
 - `transient(value)` declares an input other attributes can depend on, kept out of the model and `attributes_for`.
 - Breaking: factory and trait bodies take no parameters. Drop the `f` parameter, import it instead (`from factory_bot import f`), and write `@trait` instead of `@f.trait`. An old-style body raises an error showing the new form.

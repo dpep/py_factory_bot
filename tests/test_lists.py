@@ -3,9 +3,7 @@ from support.models import User
 
 from factory_bot import (
     build_list,
-    build_pair,
     create_list,
-    create_pair,
     f,
     factory,
     sequence,
@@ -34,8 +32,3 @@ def test_build_list_builds_n_separate_objects_with_the_same_traits_and_overrides
 
 def test_create_list_saves_each_object(user_factory):
     assert all(u.saved for u in create_list("user", 2))
-
-
-def test_pairs_are_lists_of_two(user_factory):
-    assert [u.username for u in build_pair("user")] == ["user1", "user2"]
-    assert [u.saved for u in create_pair("user", "admin")] == [True, True]

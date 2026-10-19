@@ -15,10 +15,8 @@ from factory_bot import (
     attributes_for,
     build,
     build_list,
-    build_pair,
     create,
     create_list,
-    create_pair,
     f,
     factory,
     fake,
@@ -80,14 +78,10 @@ def test_the_public_api_has_honest_types():
     assert_type(create("book"), Any)
     assert_type(build_list("book", 2), list[Any])
     assert_type(create_list("book", 2), list[Any])
-    assert_type(build_pair("book"), list[Any])
-    assert_type(create_pair("book"), list[Any])
     assert_type(build(book, "signed", title="x"), Book)
     assert_type(create(book), Book)
     assert_type(build_list(book, 2), list[Book])
     assert_type(create_list(book, 2), list[Book])
-    assert_type(build_pair(book), list[Book])
-    assert_type(create_pair(book), list[Book])
     assert_type(attributes_for(book), dict[str, Any])
     assert_type(attributes_for("book"), dict[str, Any])
     assert_type(association(book), Any)

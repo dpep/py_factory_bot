@@ -220,13 +220,12 @@ Callbacks run in definition order: parent, then child, then traits.
 Every strategy takes traits and overrides the same way.
 
 ```python
-from factory_bot import attributes_for, build_list, build_pair, create_list, create_pair
+from factory_bot import attributes_for, build_list, create_list
 
 build("user")  # an object, not saved
 create("user")  # built, then saved
 attributes_for("user")  # a dict of attributes: no object, no callbacks, no associations
 build_list("user", 3, "admin")  # three users; create_list saves each
-build_pair("user")  # a list of two; create_pair saves both
 ```
 
 `attributes_for` leaves out transients and associations, which makes it handy for a form or a constructor. The values are Python objects (dates stay dates), so serialize them yourself before sending JSON.

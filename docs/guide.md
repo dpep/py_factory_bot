@@ -172,7 +172,7 @@ def contact():
 | `create` | the object | runs | yes | runs | created |
 | `attributes_for` | a dict | no | no | no | left out |
 
-`build_list`, `create_list`, `build_pair` and `create_pair` call `build` or `create` once per object, with the same traits and overrides. Transients never appear in any result.
+`build_list` and `create_list` call `build` or `create` once per object, with the same traits and overrides. Transients never appear in any result.
 
 `after_create` doesn't run on `build`, so anything an `after_create` callback adds, like the children in the [has-many recipe](#has-many), is missing from a built object.
 
@@ -566,7 +566,6 @@ Using, each taking `(name, *traits, **overrides)`:
 |---|---|
 | `build`, `create`, `attributes_for` | One object, one saved object, or one dict. |
 | `build_list(name, n, ...)`, `create_list(name, n, ...)` | A list of `n`. |
-| `build_pair`, `create_pair` | A list of two. |
 
 Housekeeping: `fake` (a shared `Faker`), `seed(value)`, `reset_sequences()`, `clear_factories()`, `FactoryError`, and `factory_bot.sqlalchemy.persist_with(session)`.
 
