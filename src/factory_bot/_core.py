@@ -2,6 +2,7 @@ import difflib
 import inspect
 import itertools
 import os
+import re
 import weakref
 from collections.abc import Callable
 from contextvars import ContextVar
@@ -188,6 +189,7 @@ class _Evaluator:
         given = {
             n: v if isinstance(v, _Marker) else _Given(v) for n, v in overrides.items()
         }
+        self.declared = {n for layer in layers for n in layer.attributes}
         layers = [*(layer.attributes for layer in layers), given]
         self.definitions = {n: v for layer in layers for n, v in layer.items()}
         # Transient in any layer stays transient, whatever a later layer assigns.
@@ -196,6 +198,7 @@ class _Evaluator:
         }
         self.values = {}
         self.resolving = []
+        self.noted = None  # the exception this build last annotated
 
     def attributes(self):
         names = self.definitions.keys()  # declaration order
@@ -220,6 +223,12 @@ class _Evaluator:
         self.resolving.append(name)
         try:
             self.values[name] = self.evaluate(name, self.definitions[name])
+        except Exception as e:
+            if e is not self.noted:  # a dependency's failure is noted where it happened
+                self.note(
+                    e, f", attribute {name!r}{_where(_source(self.definitions[name]))}"
+                )
+            raise
         finally:
             self.resolving.pop()
         return self.values[name]
@@ -236,6 +245,11 @@ class _Evaluator:
         if callable(value):
             return self.call(name, value)
         return _fresh(value)
+
+    def note(self, e, detail="", verb="building"):
+        if not isinstance(e, FactoryError):  # ours already name the factory
+            e.add_note(f"while {verb} factory {self.factory_name!r}{detail}")
+            self.noted = e
 
     def call(self, name, fn, *leading):
         positional, keyword = _dependencies(fn, skip=len(leading))
@@ -290,10 +304,20 @@ def _construct(strategy, fac, layers, evaluator):
     attributes = evaluator.attributes()
     if strategy == "attributes_for":
         return attributes
-    obj = fac.find_model()(**attributes)
+    try:
+        obj = fac.find_model()(**attributes)
+    except Exception as e:
+        evaluator.note(e)
+        if isinstance(e, TypeError):
+            _note_unknown_keywords(e, evaluator, attributes)
+        raise
     _run_callbacks(evaluator, layers, "after_build", obj)
     if strategy == "create":
-        _persist(fac, obj)
+        try:
+            _persist(fac, obj)
+        except Exception as e:
+            evaluator.note(e, verb="saving")
+            raise
         _run_callbacks(evaluator, layers, "after_create", obj)
     return obj
 
@@ -301,7 +325,33 @@ def _construct(strategy, fac, layers, evaluator):
 def _run_callbacks(evaluator, layers, kind, obj):
     for layer in layers:
         for callback in layer.callbacks[kind]:
-            evaluator.call(getattr(callback, "__name__", repr(callback)), callback, obj)
+            name = getattr(callback, "__name__", repr(callback))
+            try:
+                evaluator.call(name, callback, obj)
+            except Exception as e:
+                evaluator.note(e, f", callback {name!r}{_where(callback)}")
+                raise
+
+
+def _note_unknown_keywords(e, evaluator, attributes):
+    # Models word it differently (dataclass, Django, SQLAlchemy), but all quote the name.
+    rejected = [n for n in re.findall(r"'(\w+)'", str(e)) if n in attributes]
+    for name in dict.fromkeys(rejected):
+        if name not in evaluator.declared and (
+            hint := _suggest(name, evaluator.declared)
+        ):
+            e.add_note(
+                f"{name!r} is not an attribute of factory {evaluator.factory_name!r}.{hint}"
+            )
+    for name in attributes:
+        if "__" in name:
+            head, _, rest = name.partition("__")
+            target = evaluator.definitions.get(head)
+            target = target.name if isinstance(target, _Association) else head
+            e.add_note(
+                f"{name!r}: deep overrides aren't supported."
+                f' Override the association instead: {head}=association("{target}", {rest}=...)'
+            )
 
 
 def _persist(fac, obj):
@@ -330,6 +380,13 @@ def _fresh(value):
     if kind in (list, set, tuple):
         return kind(_fresh(v) for v in value)
     return value
+
+
+def _source(value):
+    """The function behind a definition, to point at its line."""
+    if isinstance(value, _Transient):
+        return _source(value.value)
+    return value.fn if isinstance(value, _Sequence) else value
 
 
 def _dependencies(fn, skip=0):

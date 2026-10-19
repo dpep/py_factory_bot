@@ -20,6 +20,7 @@
 - Fix: each build gets its own copy of every list, dict, set and tuple, nested ones included, so `f.settings = {"roles": []}` no longer leaks between tests. Overrides are copied the same way, so the model holds a copy of a list you pass, not the list itself. Other objects are shared between builds: use a lambda for a fresh one.
 - Fix: a `sequence(...)` passed as an override gives its next value instead of reaching the model as a raw object.
 - Fix: a lazy attribute's positional-only parameters (`lambda name, /: ...`) are injected like the others.
+- An exception from a model or a lazy attribute keeps its type and gains a note naming the factory, plus the attribute and its file:line. A model's unknown-keyword `TypeError` also suggests the factory attribute you probably meant.
 <!-- /lane -->
 
 ## 0.0.1 - 2026-10-18
