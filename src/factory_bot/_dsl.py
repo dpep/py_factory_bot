@@ -3,9 +3,9 @@
 import inspect
 from collections.abc import Callable
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, overload
 
-from ._core import FactoryError, _Definition, _register
+from ._core import FactoryError, _Definition, _register, _set_to_create
 
 Body = TypeVar("Body", bound=Callable[[], object])
 Fn = TypeVar("Fn", bound=Callable[..., Any])
@@ -50,6 +50,23 @@ def trait(body: Body) -> Body:
     _run_body(definition, body)
     owner.traits[body.__name__] = definition
     return body
+
+
+@overload
+def to_create(fn: None, /) -> None: ...
+@overload
+def to_create(fn: Fn, /) -> Fn: ...
+def to_create(fn, /):
+    """Persist created objects with fn(obj) instead of obj.save().
+
+    Inside a factory body it sets that factory's hook (children inherit it); at top level
+    it sets the global one, and to_create(None) restores obj.save().
+    """
+    if _stack.get():
+        _current("to_create").to_create = fn
+    else:
+        _set_to_create(fn)
+    return fn
 
 
 class _F:

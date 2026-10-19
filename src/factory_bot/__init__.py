@@ -11,10 +11,9 @@ from ._core import (
     create_pair,
     reset_sequences,
     sequence,
-    to_create,
     transient,
 )
-from ._dsl import after_build, after_create, f, factory, trait
+from ._dsl import after_build, after_create, f, factory, to_create, trait
 from ._fake import fake, seed
 
 __author__ = "dpepper"

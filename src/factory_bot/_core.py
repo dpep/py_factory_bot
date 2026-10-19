@@ -42,8 +42,7 @@ def create_pair(name, /, *traits, **overrides):
     return create_list(name, 2, *traits, **overrides)
 
 
-def to_create(fn):
-    """Persist every created object with fn(obj) instead of obj.save(); None restores the default."""
+def _set_to_create(fn):
     global _to_create
     _to_create = fn
     return fn
@@ -91,6 +90,7 @@ class _Definition:
         self.traits: dict[str, _Definition] = {}
         self.children: list[_Definition] = []
         self.callbacks = {"after_build": [], "after_create": []}
+        self.to_create = None
 
     # Walked at build time, not definition time: a child is defined while its
     # parent's body is still running, so later parent attributes must still reach it.
@@ -236,7 +236,7 @@ def _run(strategy, name, traits, overrides):
     obj = fac.find_model()(**attributes)
     _run_callbacks(evaluator, layers, "after_build", obj)
     if strategy == "create":
-        _persist(fac.name, obj)
+        _persist(fac, obj)
         _run_callbacks(evaluator, layers, "after_create", obj)
     return obj
 
@@ -247,14 +247,17 @@ def _run_callbacks(evaluator, layers, kind, obj):
             evaluator.call(callback.__name__, callback, obj)
 
 
-def _persist(factory_name, obj):
-    if _to_create:
-        _to_create(obj)
+def _persist(fac, obj):
+    hook = next(
+        (d.to_create for d in reversed(fac.lineage()) if d.to_create), _to_create
+    )
+    if hook:
+        hook(obj)
         return
     if not hasattr(obj, "save"):
         raise FactoryError(
-            f"Factory {factory_name!r}: can't create a {type(obj).__name__}: it has no save()."
-            " Give it a save() method, or set a hook with factory_bot.to_create(fn)."
+            f"Factory {fac.name!r}: can't create a {type(obj).__name__}: it has no save()."
+            " Give it a save() method, or set a hook with to_create(fn), at top level or inside the factory."
         )
     obj.save()
 
