@@ -31,6 +31,17 @@ def test_any_callable_taking_kwargs_is_a_model():
     assert build("point") == {"x": 1, "y": 2}
 
 
+def test_a_function_of_one_parameter_is_a_model_unless_the_parameter_is_f():
+    def make_point(x):
+        return ("point", x)
+
+    @factory(make_point)
+    def point():
+        f.x = 1
+
+    assert build("point") == ("point", 1)
+
+
 def test_a_plain_function_is_a_model_too():
     def make_point(**kwargs):
         return kwargs

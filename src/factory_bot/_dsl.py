@@ -158,16 +158,12 @@ def _current(what, kinds=("factory",)):
 
 
 def _is_body(obj):
-    # A model must accept kwargs, so a zero-argument function can only be a body. One
-    # required positional parameter is the pre-0.0.2 `def user(f)` body, as 0.0.1 read it.
+    # A model must accept kwargs, so a zero-argument function can only be a body. A lone
+    # parameter named f is the pre-0.0.2 `def user(f)` body; `def make_point(x)` is a model.
     if not inspect.isfunction(obj):
         return False
-    params = list(inspect.signature(obj).parameters.values())
-    return not params or (
-        len(params) == 1
-        and params[0].kind is params[0].POSITIONAL_OR_KEYWORD
-        and params[0].default is params[0].empty
-    )
+    params = list(inspect.signature(obj).parameters)
+    return params in ([], ["f"])
 
 
 def _callback(kind: str) -> Callable[[Fn], Fn]:
