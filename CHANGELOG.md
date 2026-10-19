@@ -21,7 +21,9 @@
 - `association(factory, *traits, **overrides)` makes another factory's object with the parent's strategy: built for `build`, created first for `create`. Called during a build, from a lambda or a callback, it makes the object right away, for associations that depend on other attributes or come in lists. `attributes_for` leaves associations out unless you pass them.
 - Passing `<name>_id=` skips association `<name>` and still reaches the model, so `create("book", author_id=a.id)` makes no spare author. It applies only to an attribute declared as `association(...)`.
 - `transient(value)` declares an input other attributes and callbacks can use, which never reaches the model or `attributes_for`.
-- Child factories: a bare `@factory` nested in a factory inherits its model, attributes, traits, sequences and callbacks; nest `@factory(Model)` to switch model.
+<!-- lane: sus2-core -->
+- Child factories: `@factory(parent=user)` defines a child that inherits its parent's model, attributes, traits, sequences and callbacks, typed `Factory[User]`; `@factory(Admin, parent=user)` switches model. A bare `@factory` nested in a factory's body is shorthand for `parent=` that factory.
+<!-- /lane -->
 - `@after_build` and `@after_create` callbacks get the object first, then other attributes by name, transients included. They run parent first, then child, then traits.
 - `@factory(User)` returns a `Factory[User]`. Pass it wherever a name goes, as in `build(user)` or `association(user)`, and a type checker knows the result is a `User`. Names still work and give `Any`.
 - A sequence's function gets the counter first, then other attributes by name: `sequence(lambda n, title: f"{slugify(title)}-{n}")`.

@@ -65,6 +65,24 @@ def test_the_public_api_has_honest_types():
 
     assert_type(book, Factory[Book])
 
+    # A top-level child names its parent, so it is typed by the parent's model.
+    @factory(parent=book)
+    def hardcover() -> None:
+        f.title = "Hardcover"
+
+    @factory(Novel, parent=book)
+    def novel() -> None:
+        pass
+
+    @factory(parent="book")
+    def by_name() -> None:
+        pass
+
+    assert_type(hardcover, Factory[Book])
+    assert_type(novel, Factory[Novel])
+    assert_type(by_name, Factory[Any])
+    assert_type(build(hardcover), Book)
+
     @factory(dict)
     def shelf() -> None:
         # Inside a build, association() returns the built object, so it can't be a marker type.

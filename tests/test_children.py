@@ -3,7 +3,7 @@ import re
 import pytest
 from support.models import User
 
-from factory_bot import FactoryError, build, f, factory, sequence, trait
+from factory_bot import FactoryError, after_build, build, f, factory, sequence, trait
 
 
 class Admin(User):
@@ -106,3 +106,103 @@ def test_a_parent_body_that_raises_registers_its_children_neither():
 
     with pytest.raises(FactoryError, match="No factory named 'guest'"):
         build("guest")
+
+
+def _nested():
+    @factory(User)
+    def user():
+        f.first_name = "John"
+        f.username = sequence(lambda n: f"user{n}")
+
+        @trait
+        def shouty():
+            f.first_name = "JOHN"
+
+        @after_build
+        def mark(user):
+            user.last_name = "Built"
+
+        @factory
+        def guest():
+            f.email = "guest@example.com"
+
+        @factory(Admin)
+        def admin():
+            f.admin = True
+
+
+def _top_level():
+    @factory(User)
+    def user():
+        f.first_name = "John"
+        f.username = sequence(lambda n: f"user{n}")
+
+        @trait
+        def shouty():
+            f.first_name = "JOHN"
+
+        @after_build
+        def mark(user):
+            user.last_name = "Built"
+
+    @factory(parent=user)
+    def guest():
+        f.email = "guest@example.com"
+
+    @factory(Admin, parent="user")
+    def admin():
+        f.admin = True
+
+
+@pytest.mark.parametrize("define", [_nested, _top_level], ids=["nested", "parent="])
+def test_a_child_is_the_same_whichever_spelling_defines_it(define):
+    define()
+    assert [build("user").username, build("guest", "shouty")] == [
+        "user1",
+        User(
+            first_name="JOHN",
+            last_name="Built",
+            email="guest@example.com",
+            username="user2",
+        ),
+    ]
+    admin = build("admin")
+    assert type(admin) is Admin and admin.admin and admin.first_name == "John"
+
+
+def test_a_child_of_an_unknown_parent_is_an_error():
+    with pytest.raises(FactoryError, match=r"^No factory named 'usr'"):
+
+        @factory(parent="usr")
+        def guest():
+            pass
+
+
+def test_parent_is_not_given_inside_a_body():
+    message = (
+        r"^Factory 'user': @factory\(parent=\.\.\.\) def guest is inside factory 'user',"
+        r" which is already its parent: drop parent=$"
+    )
+    with pytest.raises(FactoryError, match=message):
+
+        @factory(User)
+        def user():
+            @factory(parent="user")
+            def guest():
+                pass
+
+
+def test_a_top_level_child_is_registered_on_its_own():
+    @factory(User)
+    def user():
+        pass
+
+    @factory(parent=user)
+    def guest():
+        pass
+
+    with pytest.raises(FactoryError, match="Factory 'guest' is already defined"):
+
+        @factory(parent=user)
+        def guest():
+            pass

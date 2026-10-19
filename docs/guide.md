@@ -611,7 +611,7 @@ Overrides like `team__name=` aren't supported; the note says to pass `team=assoc
 
   Also raised by `f` assigned in a lambda, which runs at build time.
 
-- `@factory needs a model: write @factory(User) or @factory(dict) above def guest`
+- `@factory needs a model or a parent: write @factory(User), @factory(dict) or @factory(parent=user) above def guest`
 
   A bare `@factory` only declares a child, inside another factory.
 

@@ -9,6 +9,8 @@ from ._core import (
     FactoryError,
     _defining_factory,
     _Definition,
+    _lookup,
+    _name_of,
     _register,
     _stack,
     _takes_leading_argument,
@@ -24,36 +26,51 @@ Fn = TypeVar("Fn", bound=Callable[..., Any])
 @overload
 def factory(body: Callable[[], None], /) -> Factory[Any]: ...  # pyright: ignore[reportOverlappingOverload]
 @overload
+def factory(*, parent: Factory[T]) -> Callable[[Callable[[], object]], Factory[T]]: ...
+@overload
+def factory(*, parent: str) -> Callable[[Callable[[], object]], Factory[Any]]: ...
+@overload
 def factory(
-    model: type[dict[Any, Any]], /
+    model: type[dict[Any, Any]], /, *, parent: str | Factory[Any] | None = None
 ) -> Callable[[Callable[[], object]], Factory[dict[str, Any]]]: ...
 @overload
 def factory(
-    model: Callable[..., T], /
+    model: Callable[..., T], /, *, parent: str | Factory[Any] | None = None
 ) -> Callable[[Callable[[], object]], Factory[T]]: ...
-def factory(model: Any, /) -> Any:
-    """@factory(User) registers a factory; nested in one, bare @factory declares a child."""
+def factory(model: Any = None, /, *, parent: Any = None) -> Any:
+    """@factory(User) registers a factory; @factory(parent=user) a child of user.
+
+    Nested in a factory's body, a factory's parent is that factory: bare @factory is the child.
+    """
     if _is_body(model):
-        return _define(model, None)
-    return lambda body: _define(body, model)
+        return _define(model, None, None)
+    return lambda body: _define(body, model, parent)
 
 
-def _define(body, model):
+def _define(body, model, parent):
     _check_body(body, "factory")
     name = body.__name__
-    if model is None and not _stack.get():
+    if _stack.get():
+        if parent is not None:
+            raise FactoryError(
+                f"@factory(parent=...) def {name} is inside factory {_defining_factory()!r},"
+                " which is already its parent: drop parent="
+            )
+        parent = _current(f"@factory def {name}")
+    elif parent is not None:
+        parent = _lookup(_name_of(parent))
+    elif model is None:
         raise FactoryError(
-            f"@factory needs a model: write @factory(User) or @factory(dict) above def {name}"
+            f"@factory needs a model or a parent: write @factory(User), @factory(dict)"
+            f" or @factory(parent=user) above def {name}"
         )
     if model is not None and not callable(model):
         raise FactoryError(f"model {model!r} is not callable", factory=name)
-    parent = _current(f"@factory def {name}") if _stack.get() else None
     definition = _Definition(name, model, body, parent=parent)
-    _run_body(
-        definition, body
-    )  # a body that raises registers nothing, children included
-    if parent:
-        parent.children.append(definition)
+    # A body that raises registers nothing, children included.
+    _run_body(definition, body)
+    if stack := _stack.get():
+        stack[-1].children.append(definition)
     else:
         _register(definition)
     return Factory(name)
