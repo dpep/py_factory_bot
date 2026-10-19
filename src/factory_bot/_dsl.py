@@ -16,22 +16,30 @@ _stack: ContextVar[tuple[_Definition, ...]] = ContextVar(
 
 
 def factory(model: Callable[..., Any], /) -> Any:
-    """Register the decorated zero-argument function as a factory for `model`, e.g. @factory(User)."""
+    """@factory(User) registers a factory; nested in one, bare @factory declares a child."""
     if _is_body(model):
-        raise FactoryError(
-            f"@factory needs a model: write @factory(User) or @factory(dict) above def {model.__name__}"
-        )
+        if not _stack.get():
+            raise FactoryError(
+                f"@factory needs a model: write @factory(User) or @factory(dict) above def {model.__name__}"
+            )
+        return _define(model, None)
+    return lambda body: _define(body, model)
 
-    def decorate(body: Body) -> Body:
-        name = body.__name__
-        if not callable(model):
-            raise FactoryError(f"Factory {name!r}: model {model!r} is not callable")
-        definition = _Definition(name, model, body)
-        _run_body(definition, body)  # a body that raises registers nothing
+
+def _define(body, model):
+    name = body.__name__
+    if model is not None and not callable(model):
+        raise FactoryError(f"Factory {name!r}: model {model!r} is not callable")
+    parent = _current(f"@factory def {name}") if _stack.get() else None
+    definition = _Definition(name, model, body, parent=parent)
+    _run_body(
+        definition, body
+    )  # a body that raises registers nothing, children included
+    if parent:
+        parent.children.append(definition)
+    else:
         _register(definition)
-        return body
-
-    return decorate
+    return body
 
 
 def trait(body: Body) -> Body:

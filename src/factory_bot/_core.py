@@ -84,30 +84,52 @@ def reset_sequences():
 class _Definition:
     """A factory or a trait: what its body declared, recorded once at definition time."""
 
-    def __init__(self, name, model, body, kind="factory"):
+    def __init__(self, name, model, body, kind="factory", parent=None):
         self.name, self.model, self.body, self.kind = name, model, body, kind
+        self.parent = parent
         self.attributes = {}
         self.traits: dict[str, _Definition] = {}
+        self.children: list[_Definition] = []
+
+    # Walked at build time, not definition time: a child is defined while its
+    # parent's body is still running, so later parent attributes must still reach it.
+    def lineage(self):
+        return [*(self.parent.lineage() if self.parent else []), self]
+
+    def find_model(self):
+        return next(d.model for d in reversed(self.lineage()) if d.model)
+
+    def find_traits(self, names):
+        traits = {name: t for d in self.lineage() for name, t in d.traits.items()}
+        for name in names:
+            if name not in traits:
+                raise FactoryError(
+                    f"Factory {self.name!r} has no trait {name!r}.{_suggest(name, traits)}"
+                    f" Traits: {', '.join(traits) or '(none)'}"
+                )
+        return [traits[name] for name in names]
 
     def definitions(self, traits):
-        definitions = dict(self.attributes)
-        for trait in traits:
-            if trait not in self.traits:
-                raise FactoryError(
-                    f"Factory {self.name!r} has no trait {trait!r}.{_suggest(trait, self.traits)}"
-                    f" Traits: {', '.join(self.traits) or '(none)'}"
-                )
-            definitions |= self.traits[trait].attributes
+        definitions = {}
+        for layer in [*self.lineage(), *traits]:
+            definitions |= layer.attributes
         return definitions
+
+    def tree(self):
+        return [self, *(d for child in self.children for d in child.tree())]
 
 
 def _register(definition):
-    name = definition.name
-    if name in _registry:
-        raise FactoryError(
-            f"Factory {name!r} is already defined{_where(_registry[name].body)}"
-        )
-    _registry[name] = definition
+    """Register a top-level factory and its children, all or none."""
+    seen = {}
+    for d in definition.tree():
+        existing = _registry.get(d.name) or seen.get(d.name)
+        if existing:
+            raise FactoryError(
+                f"Factory {d.name!r} is already defined{_where(existing.body)}"
+            )
+        seen[d.name] = d
+    _registry.update(seen)
 
 
 class _Sequence:
@@ -206,12 +228,11 @@ class _Evaluator:
 
 def _run(strategy, name, traits, overrides):
     fac = _lookup(name)
-    attributes = _Evaluator(
-        strategy, fac.name, fac.definitions(traits), overrides
-    ).attributes()
+    definitions = fac.definitions(fac.find_traits(traits))
+    attributes = _Evaluator(strategy, fac.name, definitions, overrides).attributes()
     if strategy == "attributes_for":
         return attributes
-    obj = fac.model(**attributes)
+    obj = fac.find_model()(**attributes)
     if strategy == "create":
         _persist(fac.name, obj)
     return obj
