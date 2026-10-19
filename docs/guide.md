@@ -523,9 +523,9 @@ Every `FactoryError` names the factory involved, and most suggest the fix. The o
 
   A bare `@factory` at top level. Bare `@factory` only declares a child, inside another factory.
 
-- `Factory 'user' is already defined (factories.py:12)`
+- `Factory 'user' is already defined (/app/tests/factories.py:12). To redefine it, e.g. in a REPL or after a reload, call clear_factories() first.`
 
-  Two factories share a name, or one definition ran twice: from a fixture, a reloaded module, or a factories module imported under two names. The location is the first definition.
+  Two factories share a name, or one definition ran twice: from a fixture, a reloaded module, or a factories module imported under two names. The location is the first definition. In a REPL or after a reload, call `clear_factories()` first.
 
 - `Factory 'member': @factory def moderator must be directly inside the factory, not inside trait 'admin'`
 
