@@ -88,6 +88,11 @@ def association(name, /, *traits, **overrides):
     return _Association(name, traits, overrides)
 
 
+def transient(value):
+    """An attribute other attributes can depend on that never reaches the model."""
+    return _Transient(value)
+
+
 def clear_factories():
     _registry.clear()
 
@@ -134,6 +139,11 @@ class _Association:
         self.name, self.traits, self.overrides = name, traits, overrides
 
 
+class _Transient:
+    def __init__(self, value):
+        self.value = value
+
+
 class _Definition:
     """The `f` in `def user(f):`. Assigning to it declares an attribute."""
 
@@ -174,19 +184,15 @@ class _Evaluator:
 
     def exposes(self, name):
         value = self.definitions.get(name)
+        if isinstance(value, _Transient):
+            return False
         return not (
             self.strategy == "attributes_for" and isinstance(value, _Association)
         )
 
-    def get(self, name, needed_by=None):
+    def get(self, name):
         if name in self.values:
             return self.values[name]
-        definitions = self.definitions
-        if name not in definitions:
-            raise FactoryError(
-                f"Factory {self.factory_name!r}: {needed_by!r} depends on {name!r}, which is not defined."
-                f"{_suggest(name, definitions)}{_where(definitions[needed_by])}"
-            )
         if name in self.resolving:
             cycle = " -> ".join([*self.resolving[self.resolving.index(name) :], name])
             raise FactoryError(
@@ -194,23 +200,33 @@ class _Evaluator:
             )
         self.resolving.append(name)
         try:
-            self.values[name] = self.evaluate(name, definitions[name])
+            self.values[name] = self.evaluate(name, self.definitions[name])
         finally:
             self.resolving.pop()
         return self.values[name]
 
     def evaluate(self, name, value):
+        if isinstance(value, _Transient):
+            return self.evaluate(name, value.value)
         if isinstance(value, _Sequence):
             return value.next()
         if isinstance(value, _Association):
             return self.associate(name, value)
         if callable(value):
-            return value(
-                **{dep: self.get(dep, needed_by=name) for dep in _dependencies(value)}
-            )
+            return self.call(name, value)
         if isinstance(value, (list, dict, set)):
             return copy.copy(value)
         return value
+
+    def call(self, name, fn):
+        deps = _dependencies(fn)
+        for dep in deps:
+            if dep not in self.values and dep not in self.definitions:
+                raise FactoryError(
+                    f"Factory {self.factory_name!r}: {name!r} depends on {dep!r}, which is not defined."
+                    f"{_suggest(dep, self.definitions)}{_where(fn)}"
+                )
+        return fn(**{dep: self.get(dep) for dep in deps})
 
     def associate(self, name, assoc):
         if assoc.name not in _registry:

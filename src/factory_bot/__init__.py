@@ -13,6 +13,7 @@ from ._core import (
     reset_sequences,
     sequence,
     to_create,
+    transient,
 )
 from ._fake import fake, seed
 
@@ -36,4 +37,5 @@ __all__ = [
     "seed",
     "sequence",
     "to_create",
+    "transient",
 ]
