@@ -70,6 +70,10 @@ def to_create(fn, /):
     return fn
 
 
+class _ReadError(FactoryError, AttributeError):
+    """An AttributeError too, so hasattr(f, ...), inspect.unwrap and doctest see a missing attribute."""
+
+
 class _F:
     """`f`: assigning `f.name = value` declares an attribute on the body executing right now."""
 
@@ -83,7 +87,7 @@ class _F:
         def __getattr__(self, name):
             stack = _stack.get()
             owner = f"Factory {_factory_name(stack)!r}: " if stack else ""
-            raise FactoryError(
+            raise _ReadError(
                 f"{owner}can't read f.{name} in a definition."
                 f" To use another attribute, take it as a parameter: lambda {name}: ..."
             )
