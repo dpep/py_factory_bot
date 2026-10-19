@@ -5,11 +5,13 @@
 from collections.abc import Callable
 from typing import Any
 
+from ._core import FactoryError
+
 
 def persist_with(session: Any) -> Callable[[object], None]:
     """A to_create hook that adds each object to `session` and flushes, leaving commit or rollback to the caller."""
     if not (hasattr(session, "add") and hasattr(session, "flush")):
-        raise TypeError(
+        raise FactoryError(
             "persist_with() takes a Session, not a factory of them."
             " Pass the test's session, e.g. persist_with(session)."
         )

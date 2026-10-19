@@ -9,7 +9,15 @@ from sqlalchemy.orm import Session, scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
 from support.sa_models import Author, Base, Book
 
-from factory_bot import association, create, create_list, f, factory, to_create
+from factory_bot import (
+    FactoryError,
+    association,
+    create,
+    create_list,
+    f,
+    factory,
+    to_create,
+)
 from factory_bot.sqlalchemy import persist_with
 
 
@@ -112,7 +120,7 @@ def test_a_session_factory_is_rejected_with_the_fix():
         r"^persist_with\(\) takes a Session, not a factory of them\. "
         r"Pass the test's session, e.g\. persist_with\(session\)\.$"
     )
-    with pytest.raises(TypeError, match=message):
+    with pytest.raises(FactoryError, match=message):
         persist_with(sessionmaker())
 
 

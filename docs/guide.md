@@ -547,7 +547,7 @@ Every `FactoryError` names the factory involved, and most suggest the fix. The o
 
   `sequence` wants a function of the number, not a value.
 
-- `TypeError: persist_with() takes a Session, not a factory of them. Pass the test's session, e.g. persist_with(session).`
+- `persist_with() takes a Session, not a factory of them. Pass the test's session, e.g. persist_with(session).`
 
   You passed a `sessionmaker`, or something else that isn't a session.
 
