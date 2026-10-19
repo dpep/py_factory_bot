@@ -114,3 +114,17 @@ def test_positional_only_parameters_are_injected_by_name_too():
         f.email = lambda first_name, /, last_name: f"{first_name}.{last_name}"
 
     assert build("user")["email"] == "Ann.Lee"
+
+
+def test_reading_f_at_build_time_names_the_factory_and_the_fix():
+    @factory(dict)
+    def user():
+        f.first_name = "Ann"
+        f.email = lambda: f.first_name
+
+    with pytest.raises(FactoryError) as excinfo:
+        build("user")
+    assert str(excinfo.value) == (
+        "Factory 'user': can't read f.first_name: f only declares attributes."
+        " To use another attribute, take it as a parameter: lambda first_name: ..."
+    )

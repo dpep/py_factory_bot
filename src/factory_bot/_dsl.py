@@ -95,7 +95,7 @@ class _F:
 
         def __getattr__(self, name):
             raise _ReadError(
-                f"can't read f.{name} in a definition."
+                f"can't read f.{name}: f only declares attributes."
                 f" To use another attribute, take it as a parameter: lambda {name}: ...",
             )
 

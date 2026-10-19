@@ -11,7 +11,7 @@ def test_reading_f_is_an_attribute_error_that_keeps_the_hint():
     with pytest.raises(AttributeError) as info:
         f.name  # noqa: B018
     assert isinstance(info.value, FactoryError)
-    assert "can't read f.name in a definition" in str(info.value)
+    assert "can't read f.name: f only declares attributes" in str(info.value)
 
 
 def test_f_honors_hasattr_and_unwrap():

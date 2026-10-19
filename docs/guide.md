@@ -511,7 +511,7 @@ Every `FactoryError` names the factory involved, and most suggest the fix. The o
 
   Attributes that depend on each other. `name -> name` means a callable takes its own attribute as a parameter, as in `f.name = lambda name: name.title()`. To adjust a value after it's worked out, use a callback.
 
-- `Factory 'contact': can't read f.first_name in a definition. To use another attribute, take it as a parameter: lambda first_name: ...`
+- `Factory 'contact': can't read f.first_name: f only declares attributes. To use another attribute, take it as a parameter: lambda first_name: ...`
 
   See [`f` is write-only](#f-is-write-only).
 
