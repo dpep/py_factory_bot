@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "factory_bot"
 dynamic = ["version"]
-description = "Test data factories with the ergonomics of Ruby's factory_bot"
+description = "Generate realistic test data with ease"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE.txt"]
