@@ -21,6 +21,7 @@
 - Fix: a `sequence(...)` passed as an override gives its next value instead of reaching the model as a raw object.
 - Fix: a lazy attribute's positional-only parameters (`lambda name, /: ...`) are injected like the others.
 - An exception from a model or a lazy attribute keeps its type and gains a note naming the factory, plus the attribute and its file:line. A model's unknown-keyword `TypeError` also suggests the factory attribute you probably meant.
+- A `FactoryError` raised while a factory's body runs or while it builds names that factory, the innermost one when builds nest. `f.book = lambda: build("nope")` now says `Factory 'shelf': No factory named 'nope'.`
 - `build(...)` or `attributes_for(...)` called directly in a factory body is now an error: it ran once at definition time, so every build shared one object. Wrap it in a lambda (`f.author = lambda: build("user")`) or use `association("user")`.
 - "Factory 'user' is already defined" shows the first definition's full path, and points at `clear_factories()` for redefining in a REPL or after a reload.
 <!-- /lane -->

@@ -318,12 +318,16 @@ def _run(strategy, name, traits, overrides, via=None):
             f" Make it lazy: lambda: {strategy}({name!r}), or use association({name!r})",
             factory=defining,
         )
+    # Outside the frame below: an unknown factory or trait is the caller's mistake.
     fac = _lookup(name)
     layers = fac.layers(traits)
     evaluator = _Evaluator(strategy, fac.name, layers, overrides, via)
     token = _building.set((*_building.get(), evaluator))
     try:
         return _construct(strategy, fac, layers, evaluator)
+    except FactoryError as e:
+        e.factory = e.factory or fac.name  # the innermost frame wins
+        raise
     finally:
         _building.reset(token)
 

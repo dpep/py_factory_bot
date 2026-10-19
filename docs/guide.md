@@ -543,7 +543,7 @@ Every `FactoryError` names the factory involved, and most suggest the fix. The o
 
   `create` needs to know how to save. Django models have `save()`; for SQLAlchemy, use `persist_with`. If this appears in a test that should have a database, the fixture that sets the hook didn't run.
 
-- `sequence() takes a function of the counter, e.g. sequence(lambda n: f"user{n}"), not 'user'`
+- `Factory 'user': sequence() takes a function of the counter, e.g. sequence(lambda n: f"user{n}"), not 'user'`
 
   `sequence` wants a function of the number, not a value.
 

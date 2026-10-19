@@ -103,7 +103,7 @@ def test_an_old_style_body_shows_the_new_form():
 
 
 def test_an_old_style_bare_factory_shows_the_new_form():
-    message = r"^def guest\(f\) takes no parameters: drop the parameter and import f"
+    message = r"^Factory 'user': def guest\(f\) takes no parameters: drop the parameter and import f"
     with pytest.raises(FactoryError, match=message):
 
         @factory(dict)
@@ -152,7 +152,8 @@ def test_a_lambda_body_is_rejected():
 def test_a_body_that_is_not_a_function_is_rejected():
     body = functools.partial(lambda: None)
     with pytest.raises(
-        FactoryError, match=r"^@trait takes a def, not functools\.partial\("
+        FactoryError,
+        match=r"^Factory 'user': @trait takes a def, not functools\.partial\(",
     ):
 
         @factory(dict)

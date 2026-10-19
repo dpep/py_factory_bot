@@ -140,6 +140,9 @@ def _run_body(definition, body):
     token = _stack.set((*_stack.get(), definition))
     try:
         body()
+    except FactoryError as e:
+        e.factory = e.factory or _defining_factory()  # the innermost frame wins
+        raise
     finally:
         _stack.reset(token)
 

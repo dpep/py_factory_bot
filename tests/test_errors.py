@@ -6,7 +6,17 @@ from dataclasses import dataclass
 import pytest
 from support.models import Post, User
 
-from factory_bot import after_build, association, build, create, f, factory, transient
+from factory_bot import (
+    FactoryError,
+    after_build,
+    association,
+    build,
+    create,
+    f,
+    factory,
+    sequence,
+    transient,
+)
 
 
 @dataclass
@@ -157,3 +167,37 @@ def test_a_callback_whose_dependency_fails_is_noted_once():
     assert [n.split(" (")[0] for n in notes(excinfo)] == [
         "while building factory 'user', attribute 'n'"
     ]
+
+
+def test_a_factory_error_raised_in_a_body_names_the_factory():
+    with pytest.raises(
+        FactoryError, match=r"^Factory 'user': sequence\(\) takes a function"
+    ):
+
+        @factory(dict)
+        def user():
+            f.name = sequence("user")
+
+
+def test_a_factory_error_raised_in_a_build_names_the_factory():
+    @factory(dict)
+    def shelf():
+        f.book = lambda: build("nope")
+
+    with pytest.raises(
+        FactoryError, match=r"^Factory 'shelf': No factory named 'nope'\.$"
+    ):
+        build("shelf")
+
+
+def test_a_nested_factory_error_names_the_innermost_factory():
+    @factory(dict)
+    def inner():
+        f.y = lambda missing: 1
+
+    @factory(dict)
+    def outer():
+        f.i = association("inner")
+
+    with pytest.raises(FactoryError, match=r"^Factory 'inner': 'y' depends on"):
+        build("outer")
