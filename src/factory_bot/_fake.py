@@ -12,6 +12,14 @@ _HELPERS = frozenset(dir(Generator)) - {"format", "parse"}
 class _Fake(Faker):
     """Faker that refuses a provider call made while a factory body runs: it would freeze one value."""
 
+    def __getattribute__(self, attr):
+        # Faker's own error here points at Faker.seed(), which doesn't seed fake.
+        if attr == "seed":
+            raise FactoryError(
+                "fake.seed() doesn't seed fake: call factory_bot.seed(...) instead."
+            )
+        return super().__getattribute__(attr)
+
     def __getattr__(self, attr):
         # Only reached for what Faker proxies to its Generator: provider methods and Generator
         # helpers. Faker's own members (unique, seed_instance, random, ...) are found first.

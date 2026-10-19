@@ -50,6 +50,7 @@
 - An `async def` or a generator function as an attribute, a sequence's function or a callback is an error, and so is a function that returns a coroutine, instead of handing the model an un-awaited coroutine or an unrun generator.
 <!-- /lane -->
 - `seed()` also clears `fake.unique`, so the same seed gives the same data whatever ran before.
+- `fake.seed(...)` is an error pointing at `factory_bot.seed(...)`, instead of Faker's pointing at `Faker.seed()`, which doesn't seed `fake`.
 - A lazy attribute's positional-only parameters are injected like the others.
 - Errors say where they happened. A `FactoryError` names the factory, the innermost when builds nest. An exception from a model, lambda or callback keeps its type and gains notes naming the factory and attribute with its file:line. A model's unknown-keyword `TypeError` suggests the attribute you probably meant.
 - "Factory 'user' is already defined" shows the first definition's full path and suggests `clear_factories()` for a REPL or a reload.

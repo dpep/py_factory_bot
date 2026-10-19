@@ -53,6 +53,13 @@ def test_faker_seed_does_not_seed_fake_once_seed_has():
         random.setstate(state)
 
 
+def test_fake_seed_points_at_factory_bot_seed():
+    # Faker's own error points at Faker.seed(), which doesn't seed fake.
+    message = r"^fake\.seed\(\) doesn't seed fake: call factory_bot\.seed\(\.\.\.\) instead\.$"
+    with pytest.raises(FactoryError, match=message):
+        fake.seed(0)
+
+
 # Frozen calls: a provider called while a body runs would hand every build one value.
 
 
