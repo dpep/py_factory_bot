@@ -14,7 +14,7 @@ from ._core import (
     to_create,
     transient,
 )
-from ._dsl import f, factory, trait
+from ._dsl import after_build, after_create, f, factory, trait
 from ._fake import fake, seed
 
 __author__ = "dpepper"
@@ -22,6 +22,8 @@ __version__ = "0.0.1"
 
 __all__ = [
     "FactoryError",
+    "after_build",
+    "after_create",
     "association",
     "attributes_for",
     "build",

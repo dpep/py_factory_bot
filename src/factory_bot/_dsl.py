@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 from ._core import FactoryError, _Definition, _register
 
 Body = TypeVar("Body", bound=Callable[[], object])
+Fn = TypeVar("Fn", bound=Callable[..., Any])
 
 # An immutable tuple: a thread or task that copied the context must never see another's pushes.
 _stack: ContextVar[tuple[_Definition, ...]] = ContextVar(
@@ -118,3 +119,19 @@ def _factory_name(stack):
 def _is_body(obj):
     # A model must accept kwargs, so a zero-argument function can only be a body.
     return inspect.isfunction(obj) and not inspect.signature(obj).parameters
+
+
+def _callback(kind):
+    def decorate(fn: Fn) -> Fn:
+        _current(f"@{kind} def {fn.__name__}", kinds=("factory", "trait")).callbacks[
+            kind
+        ].append(fn)
+        return fn
+
+    decorate.__name__ = decorate.__qualname__ = kind
+    decorate.__doc__ = f"Run fn(instance, **dependencies) {kind.replace('_', ' ')}; dependencies are injected by name."
+    return decorate
+
+
+after_build = _callback("after_build")
+after_create = _callback("after_create")

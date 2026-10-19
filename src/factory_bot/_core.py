@@ -90,6 +90,7 @@ class _Definition:
         self.attributes = {}
         self.traits: dict[str, _Definition] = {}
         self.children: list[_Definition] = []
+        self.callbacks = {"after_build": [], "after_create": []}
 
     # Walked at build time, not definition time: a child is defined while its
     # parent's body is still running, so later parent attributes must still reach it.
@@ -99,7 +100,11 @@ class _Definition:
     def find_model(self):
         return next(d.model for d in reversed(self.lineage()) if d.model)
 
-    def find_traits(self, names):
+    def layers(self, trait_names):
+        """The lineage then the named traits: later layers win, callbacks run in this order."""
+        return [*self.lineage(), *self._find_traits(trait_names)]
+
+    def _find_traits(self, names):
         traits = {name: t for d in self.lineage() for name, t in d.traits.items()}
         for name in names:
             if name not in traits:
@@ -108,12 +113,6 @@ class _Definition:
                     f" Traits: {', '.join(traits) or '(none)'}"
                 )
         return [traits[name] for name in names]
-
-    def definitions(self, traits):
-        definitions = {}
-        for layer in [*self.lineage(), *traits]:
-            definitions |= layer.attributes
-        return definitions
 
     def tree(self):
         return [self, *(d for child in self.children for d in child.tree())]
@@ -205,15 +204,15 @@ class _Evaluator:
             return copy.copy(value)
         return value
 
-    def call(self, name, fn):
-        deps = _dependencies(fn)
+    def call(self, name, fn, *leading):
+        deps = _dependencies(fn, skip=len(leading))
         for dep in deps:
             if dep not in self.values and dep not in self.definitions:
                 raise FactoryError(
                     f"Factory {self.factory_name!r}: {name!r} depends on {dep!r}, which is not defined."
                     f"{_suggest(dep, self.definitions)}{_where(fn)}"
                 )
-        return fn(**{dep: self.get(dep) for dep in deps})
+        return fn(*leading, **{dep: self.get(dep) for dep in deps})
 
     def associate(self, name, assoc):
         if assoc.name not in _registry:
@@ -228,14 +227,24 @@ class _Evaluator:
 
 def _run(strategy, name, traits, overrides):
     fac = _lookup(name)
-    definitions = fac.definitions(fac.find_traits(traits))
-    attributes = _Evaluator(strategy, fac.name, definitions, overrides).attributes()
+    layers = fac.layers(traits)
+    definitions = {name: v for layer in layers for name, v in layer.attributes.items()}
+    evaluator = _Evaluator(strategy, fac.name, definitions, overrides)
+    attributes = evaluator.attributes()
     if strategy == "attributes_for":
         return attributes
     obj = fac.find_model()(**attributes)
+    _run_callbacks(evaluator, layers, "after_build", obj)
     if strategy == "create":
         _persist(fac.name, obj)
+        _run_callbacks(evaluator, layers, "after_create", obj)
     return obj
+
+
+def _run_callbacks(evaluator, layers, kind, obj):
+    for layer in layers:
+        for callback in layer.callbacks[kind]:
+            evaluator.call(callback.__name__, callback, obj)
 
 
 def _persist(factory_name, obj):
@@ -250,10 +259,10 @@ def _persist(factory_name, obj):
     obj.save()
 
 
-def _dependencies(fn):
+def _dependencies(fn, skip=0):
     # Only required params: fake.paragraph(nb_sentences=3) must not be injected.
     try:
-        params = inspect.signature(fn).parameters.values()
+        params = list(inspect.signature(fn).parameters.values())[skip:]
     except (TypeError, ValueError):  # some builtins (dict, str) have no signature
         return []
     keyword = (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
