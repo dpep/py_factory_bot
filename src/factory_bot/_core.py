@@ -11,10 +11,19 @@ from typing import Any
 _registry: dict[str, "_Definition"] = {}
 _sequences: weakref.WeakSet["_Sequence"] = weakref.WeakSet()
 _to_create = None
-# The builds running right now, innermost last. Immutable, so a copied context never sees pushes.
+# What is running right now, innermost last: factory and trait bodies (definition time), and
+# builds. Immutable tuples, so a thread or task that copied the context never sees another's pushes.
+_stack: ContextVar[tuple["_Definition", ...]] = ContextVar(
+    "factory_bot_stack", default=()
+)
 _building: ContextVar[tuple["_Evaluator", ...]] = ContextVar(
     "factory_bot_building", default=()
 )
+
+
+def _defining_factory() -> str | None:
+    """The innermost factory whose body is running right now, if any."""
+    return next((d.name for d in reversed(_stack.get()) if d.kind == "factory"), None)
 
 
 class FactoryError(Exception):
@@ -292,11 +301,9 @@ class _Evaluator:
 
 
 def _run(strategy, name, traits, overrides, via=None):
-    from ._dsl import _defining, _defining_name  # _dsl imports _core
-
-    if _defining():
+    if (defining := _defining_factory()) is not None:
         raise FactoryError(
-            f"Factory {_defining_name()!r}: {strategy}({name!r}) ran while a factory was being defined, so it would run once, at import."
+            f"Factory {defining!r}: {strategy}({name!r}) ran while a factory was being defined, so it would run once, at import."
             f" Make it lazy: lambda: {strategy}({name!r}), or use association({name!r})"
         )
     fac = _lookup(name)

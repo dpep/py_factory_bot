@@ -2,29 +2,20 @@
 
 import inspect
 from collections.abc import Callable
-from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 
-from ._core import FactoryError, _Definition, _register, _set_to_create, _where
+from ._core import (
+    FactoryError,
+    _defining_factory,
+    _Definition,
+    _register,
+    _set_to_create,
+    _stack,
+    _where,
+)
 
 Body = TypeVar("Body", bound=Callable[[], object])
 Fn = TypeVar("Fn", bound=Callable[..., Any])
-
-# An immutable tuple: a thread or task that copied the context must never see another's pushes.
-_stack: ContextVar[tuple[_Definition, ...]] = ContextVar(
-    "factory_bot_stack", default=()
-)
-
-
-def _defining() -> bool:
-    """Whether a factory or trait body is executing right now, in this context."""
-    return bool(_stack.get())
-
-
-def _defining_name() -> str | None:
-    """The innermost factory whose body is executing right now, if any."""
-    stack = _stack.get()
-    return _factory_name(stack) if stack else None
 
 
 def factory(model: Callable[..., Any], /) -> Callable[[Body], Body]:
@@ -103,8 +94,8 @@ class _F:
     if not TYPE_CHECKING:  # reads stay a type error rather than Any
 
         def __getattr__(self, name):
-            stack = _stack.get()
-            owner = f"Factory {_factory_name(stack)!r}: " if stack else ""
+            defining = _defining_factory()
+            owner = f"Factory {defining!r}: " if defining else ""
             raise _ReadError(
                 f"{owner}can't read f.{name} in a definition."
                 f" To use another attribute, take it as a parameter: lambda {name}: ..."
@@ -159,14 +150,10 @@ def _current(what, kinds=("factory",)):
         raise FactoryError(f"{what} only works inside a @factory body")
     if stack[-1].kind not in kinds:
         raise FactoryError(
-            f"Factory {_factory_name(stack)!r}: {what} must be directly inside the factory,"
+            f"Factory {_defining_factory()!r}: {what} must be directly inside the factory,"
             f" not inside {stack[-1].kind} {stack[-1].name!r}"
         )
     return stack[-1]
-
-
-def _factory_name(stack):
-    return next(d.name for d in reversed(stack) if d.kind == "factory")
 
 
 def _is_body(obj):
@@ -188,7 +175,7 @@ def _callback(kind: str) -> Callable[[Fn], Fn]:
         what = f"@{kind} def {name}" if name else f"@{kind} {fn!r}"
         owner = _current(what, kinds=("factory", "trait"))
         if not _takes_instance_first(fn):
-            factory_name = _factory_name(_stack.get())
+            factory_name = _defining_factory()
             shown = f"{what}{inspect.signature(fn)}" if name and callable(fn) else what
             raise FactoryError(
                 f"Factory {factory_name!r}: {shown} must take the instance first,"
