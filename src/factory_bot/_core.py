@@ -527,7 +527,7 @@ def _persist(evaluator, obj):
     if not hasattr(obj, "save"):
         raise evaluator.error(
             f"can't create a {type(obj).__name__}: it has no save()."
-            " Give it a save() method, or set a global hook with persist_with(fn)."
+            " Give it a save() method, or call persist_with() with a function or a SQLAlchemy session."
         )
     obj.save()
 

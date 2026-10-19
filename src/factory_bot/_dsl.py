@@ -2,7 +2,7 @@
 
 import inspect
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, TypeVar, overload
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, overload
 
 from ._core import (
     Factory,
@@ -19,6 +19,16 @@ from ._core import (
 Body = TypeVar("Body", bound=Callable[[], object])
 T = TypeVar("T")
 Fn = TypeVar("Fn", bound=Callable[..., Any])
+
+
+class _Session(Protocol):
+    """A SQLAlchemy Session or scoped_session, duck-typed so factory_bot never imports SQLAlchemy."""
+
+    def add(self, instance: Any, /) -> object: ...
+    def flush(self) -> object: ...
+
+
+S = TypeVar("S", bound=_Session)
 
 
 # A zero-argument function is a body, never a model: a model takes keyword arguments.
@@ -75,17 +85,49 @@ def trait(body: Body) -> Body:
     return body
 
 
+# A session before a function: scoped_session is callable too.
 @overload
-def persist_with(fn: None, /) -> None: ...
+def persist_with(hook: None, /) -> None: ...
 @overload
-def persist_with(fn: Fn, /) -> Fn: ...
-def persist_with(fn, /):
-    """Persist every created object with fn(obj) instead of obj.save(); persist_with(None) restores it."""
+def persist_with(hook: S, /) -> S: ...
+@overload
+def persist_with(hook: Fn, /) -> Fn: ...
+def persist_with(hook, /):
+    """Save every created object with hook(obj), or session.add(obj) + flush(), instead of obj.save().
+
+    The session is never committed, so the test's transaction still decides. persist_with(None)
+    restores obj.save().
+    """
     if _stack.get():
         raise FactoryError(
-            "persist_with(fn) sets the global save hook, so call it outside any factory body, e.g. in a fixture."
+            "persist_with() sets the global save hook, so call it outside any factory body, e.g. in a fixture."
         )
-    return _set_persist_hook(fn)
+    if _is_session(hook):
+        _set_persist_hook(lambda obj: _add_and_flush(hook, obj))
+    elif _is_session(
+        getattr(hook, "class_", None)
+    ):  # callable, so it would pass as a hook
+        raise FactoryError(
+            "persist_with() takes a session, not a sessionmaker."
+            " Pass the test's session, e.g. persist_with(session)."
+        )
+    elif hook is None or callable(hook):
+        _set_persist_hook(hook)
+    else:
+        raise FactoryError(
+            "persist_with() takes a function, a SQLAlchemy session, or None to restore obj.save();"
+            f" got {hook!r}."
+        )
+    return hook
+
+
+def _is_session(obj):
+    return hasattr(obj, "add") and hasattr(obj, "flush")
+
+
+def _add_and_flush(session, obj):
+    session.add(obj)
+    session.flush()
 
 
 class _ReadError(FactoryError, AttributeError):

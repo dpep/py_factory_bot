@@ -7,7 +7,6 @@ from typing import Any, TypedDict, assert_type
 
 from faker import Faker
 
-import factory_bot.sqlalchemy
 from factory_bot import (
     Factory,
     after_build,
@@ -94,9 +93,7 @@ def test_the_public_api_has_honest_types():
     assert_type(lint(book, strategy="create"), None)
 
     assert_type(persist_with(None), None)
-    assert_type(
-        factory_bot.sqlalchemy.persist_with(_Session()), Callable[[object], None]
-    )
+    assert_type(persist_with(_Session()), _Session)
     assert_type(fake, Faker)
     assert_type(seed(1), None)
 
@@ -144,6 +141,7 @@ def _misuse_is_a_type_error(book: Factory[Book], untyped: Any) -> None:
     book()  # pyright: ignore[reportCallIssue]
     book.build()  # pyright: ignore[reportAttributeAccessIssue]
     lint(strategy="attributes_for")  # pyright: ignore[reportArgumentType]
+    persist_with("users")  # pyright: ignore[reportCallIssue, reportArgumentType]
 
     # A model typed Any matches every overload, so pyright keeps the undecorated function:
     # use the factory's name, or cast.

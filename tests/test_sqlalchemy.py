@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session, scoped_session, sessionmaker
 from sqlalchemy.pool import StaticPool
 from support.sa_models import Author, Base, Book
 
-import factory_bot.sqlalchemy
 from factory_bot import (
     FactoryError,
     association,
@@ -47,7 +46,7 @@ def rolled_back(engine):
 @pytest.fixture
 def session(engine):
     with rolled_back(engine) as session:
-        persist_with(factory_bot.sqlalchemy.persist_with(session))
+        persist_with(session)
         yield session
 
 
@@ -95,7 +94,7 @@ def test_the_fk_constraint_is_really_enforced(session):
 
 def test_it_flushes_without_committing(engine):
     with Session(engine) as session:
-        persist_with(factory_bot.sqlalchemy.persist_with(session))
+        persist_with(session)
         create_list("book", 2)
         session.rollback()
         assert count(session, Book) == 0
@@ -103,7 +102,7 @@ def test_it_flushes_without_committing(engine):
 
 def test_rolling_back_the_test_transaction_leaves_the_db_empty(engine):
     with rolled_back(engine) as session:
-        persist_with(factory_bot.sqlalchemy.persist_with(session))
+        persist_with(session)
         create("book")
         assert count(session, Book) == 1
 
@@ -115,7 +114,7 @@ def test_a_scoped_session_works_as_is(engine):
     with engine.connect() as connection:
         transaction = connection.begin()
         registry = scoped_session(sessionmaker(bind=connection))
-        persist_with(factory_bot.sqlalchemy.persist_with(registry))
+        persist_with(registry)
 
         book = create("book")
         assert registry().get(Book, book.id) is book
@@ -124,18 +123,18 @@ def test_a_scoped_session_works_as_is(engine):
         transaction.rollback()
 
 
-def test_a_session_factory_is_rejected_with_the_fix():
+def test_a_sessionmaker_is_rejected_with_the_fix():
     message = (
-        r"^persist_with\(\) takes a Session, not a factory of them\. "
+        r"^persist_with\(\) takes a session, not a sessionmaker\. "
         r"Pass the test's session, e.g\. persist_with\(session\)\.$"
     )
     with pytest.raises(FactoryError, match=message):
-        factory_bot.sqlalchemy.persist_with(sessionmaker())
+        persist_with(sessionmaker())
 
 
 def test_importing_factory_bot_never_imports_an_orm():
     code = (
-        "import sys, factory_bot, factory_bot.sqlalchemy;"
+        "import sys, factory_bot;"
         "print(sorted({m.split('.')[0] for m in sys.modules} & {'django', 'sqlalchemy'}))"
     )
     out = subprocess.run(

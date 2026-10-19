@@ -38,7 +38,7 @@ def test_an_object_without_save_names_both_fixes():
     with pytest.raises(
         FactoryError,
         match=r"^Factory 'point': can't create a dict: it has no save\(\)\. "
-        r"Give it a save\(\) method, or set a global hook with persist_with\(fn\)\.$",
+        r"Give it a save\(\) method, or call persist_with\(\) with a function or a SQLAlchemy session\.$",
     ):
         create("point")
 
@@ -54,8 +54,62 @@ def test_persist_with_none_restores_save():
     assert create("user").saved
 
 
+class Session:
+    """Just the SQLAlchemy shape persist_with relies on, plus a commit it must never call."""
+
+    def __init__(self):
+        self.calls = []
+
+    def add(self, obj):
+        self.calls.append(("add", obj))
+
+    def flush(self):
+        self.calls.append(("flush",))
+
+    def commit(self):
+        self.calls.append(("commit",))
+
+
+def test_persist_with_a_session_adds_and_flushes_each_object_without_committing():
+    session = Session()
+    assert persist_with(session) is session
+
+    @factory(dict)
+    def point():
+        f.x = 1
+
+    first, second = create("point"), create("point")
+    assert session.calls == [("add", first), ("flush",), ("add", second), ("flush",)]
+
+
+def test_persist_with_a_callable_session_treats_it_as_a_session():
+    # scoped_session is callable, but it has add and flush, so it's a session.
+    class Scoped(Session):
+        def __call__(self, **kw):
+            raise AssertionError("called like a hook")
+
+    session = Scoped()
+    persist_with(session)
+
+    @factory(dict)
+    def point():
+        f.x = 1
+
+    point_ = create("point")
+    assert session.calls == [("add", point_), ("flush",)]
+
+
+def test_persist_with_anything_else_lists_what_it_takes():
+    message = (
+        r"^persist_with\(\) takes a function, a SQLAlchemy session, or None to restore obj\.save\(\);"
+        r" got 'users'\.$"
+    )
+    with pytest.raises(FactoryError, match=message):
+        persist_with("users")
+
+
 def test_persist_with_inside_a_body_points_at_the_global_hook():
-    message = r"^Factory 'point': persist_with\(fn\) sets the global save hook, so call it outside any factory body, e\.g\. in a fixture\.$"
+    message = r"^Factory 'point': persist_with\(\) sets the global save hook, so call it outside any factory body, e\.g\. in a fixture\.$"
     with pytest.raises(FactoryError, match=message):
 
         @factory(dict)
