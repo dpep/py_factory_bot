@@ -156,3 +156,40 @@ def test_an_unknown_association_called_while_building_names_the_attribute():
     message = r"^Factory 'user': 'tags' is an association to 'tga', which is not a factory\. Did you mean 'tag'\?$"
     with pytest.raises(FactoryError, match=message):
         build("user")
+
+
+def test_an_association_cycle_names_the_chain():
+    @factory(dict)
+    def post():
+        f.author = association("user")
+
+    @factory(dict)
+    def user():
+        f.post = association("post")
+
+    message = r"^Factory 'post': circular association: post\.author -> user\.post -> post\.author$"
+    with pytest.raises(FactoryError, match=message):
+        build("post")
+
+
+def test_an_association_cycle_through_a_lazy_attribute_names_the_chain():
+    @factory(dict)
+    def user():
+        f.posts = lambda: [association("post")]
+
+    @factory(dict)
+    def post():
+        f.author = association("user")
+
+    message = r"^Factory 'user': circular association: user\.posts -> post\.author -> user\.posts$"
+    with pytest.raises(FactoryError, match=message):
+        build("user")
+
+
+def test_an_association_that_overrides_its_way_out_is_not_a_cycle():
+    @factory(dict)
+    def node():
+        f.depth = transient(2)
+        f.parent = lambda depth: association("node", depth=depth - 1) if depth else None
+
+    assert build("node") == {"parent": {"parent": {"parent": None}}}

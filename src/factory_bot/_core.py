@@ -179,9 +179,10 @@ _Marker = (_Sequence, _Association, _Transient)
 class _Evaluator:
     """Resolves one build's attributes, each at most once, in dependency order."""
 
-    def __init__(self, strategy, factory_name, layers, overrides):
+    def __init__(self, strategy, factory_name, layers, overrides, via=None):
         self.strategy = strategy
         self.factory_name = factory_name
+        self.via = via  # (label, key) of the association that started this build
         # Overrides are the last layer. A marker in one evaluates like a definition;
         # anything else is a plain value, never called.
         given = {
@@ -247,8 +248,8 @@ class _Evaluator:
         return fn(*leading, **{dep: self.get(dep) for dep in deps})
 
     def associate(self, assoc, name=None):
+        name = name or (self.resolving[-1] if self.resolving else None)
         if assoc.name not in _registry:
-            name = name or (self.resolving[-1] if self.resolving else None)
             what = f"{name!r} is an association" if name else "an association"
             raise FactoryError(
                 f"Factory {self.factory_name!r}: {what} to {assoc.name!r},"
@@ -256,13 +257,27 @@ class _Evaluator:
             )
         # attributes_for omits associations, but a dependent attribute may still need the object.
         strategy = "create" if self.strategy == "create" else "build"
-        return _run(strategy, assoc.name, assoc.traits, assoc.overrides)
+        # The same association with the same overrides, inside itself, never ends.
+        key = (
+            assoc.name,
+            assoc.traits,
+            [(k, id(v)) for k, v in assoc.overrides.items()],
+        )
+        label = f"{self.factory_name}.{name}" if name else self.factory_name
+        building = _building.get()
+        for i, outer in enumerate(building):
+            if outer.via and outer.via[1] == key:
+                chain = [e.via[0] for e in building[i:] if e.via]
+                raise FactoryError(
+                    f"Factory {self.factory_name!r}: circular association: {' -> '.join([*chain, label])}"
+                )
+        return _run(strategy, assoc.name, assoc.traits, assoc.overrides, (label, key))
 
 
-def _run(strategy, name, traits, overrides):
+def _run(strategy, name, traits, overrides, via=None):
     fac = _lookup(name)
     layers = fac.layers(traits)
-    evaluator = _Evaluator(strategy, fac.name, layers, overrides)
+    evaluator = _Evaluator(strategy, fac.name, layers, overrides, via)
     token = _building.set((*_building.get(), evaluator))
     try:
         return _construct(strategy, fac, layers, evaluator)
