@@ -308,3 +308,76 @@ def test_fake_unique_starts_fresh_each_test(pytester):
 
     assert reversed_order == together
     assert alone["test_b"] == together["test_b"]
+
+
+# A fixture restores only a hook it changed: the hook it found may be a test's, already undone.
+
+LAZY = """
+import pytest
+from factory_bot import persist_with
+
+def in_test(obj): ...
+
+@pytest.fixture(scope="module")
+def mod_resource():
+    return "resource"
+
+@pytest.fixture(scope="class")
+def cls_resource():
+    return "resource"
+
+class TestK:
+    def test_class(self, request):
+        persist_with(in_test)
+        request.getfixturevalue("cls_resource")
+
+    def test_after_class(self):
+        pass
+
+def test_module(request):
+    persist_with(in_test)
+    request.getfixturevalue("mod_resource")
+"""
+
+
+@pytest.mark.parametrize("which", ["test_lazy.py", "test_lazy.py::TestK"])
+def test_a_fixture_set_up_lazily_does_not_restore_the_tests_hook(hooks, which):
+    hooks.makepyfile(test_lazy=LAZY, test_next=NEXT_MODULE)
+    result = hooks.runpytest("-s", "-p", "no:randomly", which, "test_next.py")
+    result.assert_outcomes(passed=4 if which == "test_lazy.py" else 3)
+    assert names(result)["test_m2"] == "at_import"
+
+
+AUTOUSE_CONFTEST = """
+import pytest
+from factory_bot import _core, persist_with
+
+def at_import(obj): ...
+def in_autouse(obj): ...
+
+persist_with(at_import)
+
+@pytest.fixture(autouse=True)
+def autouse_hook():
+    persist_with(in_autouse)  # no undo, like a per-test database fixture
+
+@pytest.fixture(scope="session")
+def session_resource():  # like pytest-django's django_db_setup
+    return "resource"
+
+def pytest_sessionfinish():
+    print(f"test_session_end={_core._persist_hook.__name__}")
+"""
+
+
+def test_a_session_fixture_set_up_after_an_autouse_hook_does_not_restore_it(
+    pytester,
+):
+    pytester.makeconftest(AUTOUSE_CONFTEST)
+    pytester.makepyfile(
+        test_lazy="def test_lazy(request):\n    request.getfixturevalue('session_resource')"
+    )
+    # Faker's plugin sets up a session fixture first, whose teardown would mask the leak.
+    result = pytester.runpytest("-s", "-p", "no:randomly", "-p", "no:faker")
+    result.assert_outcomes(passed=1)
+    assert names(result)["test_session_end"] == "at_import"

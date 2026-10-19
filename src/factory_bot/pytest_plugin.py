@@ -37,9 +37,15 @@ def pytest_fixture_setup(fixturedef, request):
     # request.node is the fixture's scope node (test, module, session), not its definition:
     # seeding from the definition would give a function fixture the same data in every test.
     # fake.unique is left alone, so a test and its fixtures share one seen-set.
-    hook = _core._persist_hook
+    before = after = _core._persist_hook
+
+    def restore_hook():
+        # Only a hook this fixture set: the one it found may be a test's, since undone.
+        if after is not before:
+            _core._set_persist_hook(before)
+
     # Registered before setup so it runs after the fixture's own teardown (finalizers are LIFO).
-    request.addfinalizer(lambda: _core._set_persist_hook(hook))
+    request.addfinalizer(restore_hook)
     state = fake.random.getstate()
     fake.seed_instance(
         f"{_seed(request.config)}:{request.node.nodeid}::{fixturedef.argname}"
@@ -47,6 +53,7 @@ def pytest_fixture_setup(fixturedef, request):
     try:
         return (yield)
     finally:
+        after = _core._persist_hook
         # Resume the stream the setup interrupted: the requesting test's data stays its own.
         fake.random.setstate(state)
 
