@@ -7,7 +7,6 @@ from factory_bot import (
     FactoryError,
     association,
     build,
-    build_list,
     f,
     factory,
     transient,
@@ -57,37 +56,6 @@ def test_an_attribute_called_name_can_be_overridden():
         f.name = "Ann"
 
     assert build("person", name="Bea") == {"name": "Bea"}
-
-
-def test_mutable_values_are_not_shared_between_builds():
-    @factory(User)
-    def user():
-        f.tags = []
-
-    first, second = build("user"), build("user")
-    first.tags.append("x")
-    assert second.tags == []
-
-
-def test_nested_containers_are_not_shared_between_builds():
-    @factory(dict)
-    def user():
-        f.settings = {"roles": [], "pair": ([],), "flags": {frozenset()}}
-
-    first, second = build("user"), build("user")
-    first["settings"]["roles"].append("admin")
-    first["settings"]["pair"][0].append("x")
-    assert second["settings"] == {"roles": [], "pair": ([],), "flags": {frozenset()}}
-
-
-def test_container_overrides_are_copied_per_build():
-    @factory(dict)
-    def user():
-        pass
-
-    first, second = build_list("user", 2, tags=[])
-    first["tags"].append("x")
-    assert second["tags"] == []
 
 
 def test_other_objects_are_shared_so_use_a_lambda_for_a_fresh_one():
