@@ -1,12 +1,16 @@
 # factory_bot guide
 
-The [README](https://github.com/dpep/py_factory_bot/blob/main/README.md) is the tour. This is the manual.
+The [README](https://github.com/dpep/py_factory_bot/blob/main/README.md) gets you to a first green test. This is the manual.
 
 - [How a factory works](#how-a-factory-works)
 - [The value rule](#the-value-rule)
-- [Gotchas](#gotchas)
-- [Strategies and callbacks](#strategies-and-callbacks)
+- [Declaring attributes](#declaring-attributes)
+- [Child factories](#child-factories)
 - [Associations](#associations)
+- [Strategies](#strategies)
+- [Saving](#saving)
+- [Faker](#faker)
+- [Gotchas](#gotchas)
 - [Organizing factories](#organizing-factories)
 - [Test isolation](#test-isolation)
 - [Type checkers](#type-checkers)
@@ -33,35 +37,20 @@ assert build(user) == {"name": "Ann", "username": "user1"}
 assert build("user", name="Bea") == {"name": "Bea", "username": "user2"}
 ```
 
-The model is anything that takes keyword arguments: a class, a dataclass, `dict`, a Django or SQLAlchemy model, a plain function.
+The model is anything that takes keyword arguments: a class, a dataclass, `dict`, a Django or SQLAlchemy model, a plain function. `@factory` returns the factory; its name works anywhere the factory does, and names are global.
 
-`@factory` returns the factory, which you pass to `build`. Its name, `"user"`, works anywhere the factory does. Names are global, so each must be unique.
-
-When several places set the same attribute, the most specific wins:
-
-1. overrides passed to `build(...)`
-2. traits, in the order listed (the last one wins)
-3. the child factory
-4. its parent
-
-An override may also name an attribute the factory never declared; it goes straight to the model.
+When several places set the same attribute, the most specific wins: overrides passed to `build`, then traits (the last listed wins), then a child factory, then its parent. An override may also name an attribute the factory never declared; it goes straight to the model.
 
 
 ## The value rule
 
-Each build turns every attribute into a value by one rule:
-
-- **A marker** does its job. `sequence(fn)` calls `fn` with its next number, then any attributes it names. `association(factory, ...)` makes that factory's object. `transient(value)` resolves `value` by this same rule, but keeps it from the model.
-- **A class** is stored as-is: `f.status = Status` gives the `Enum` class.
-- **Any other callable** is called on every build. Each parameter without a default is filled with the attribute of the same name. Parameters with defaults, `*args` and `**kwargs` are left alone.
-- **A list, dict, set or tuple** is copied, nested ones too, so builds never share one.
-- **Anything else** is used as-is: every build gets that same object.
-- **An override** is a plain value, used as given and never called. An override that's a marker is evaluated like a declaration: `build(user, username=sequence(lambda n: f"guest{n}"))`.
-
-Each attribute is worked out at most once per build, so everything that depends on it sees the same value.
+- **Calling:** functions (defs, lambdas, methods, builtins like `datetime.now`, `functools.partial`) are called on every build, with each parameter that has no default filled from the attribute of the same name. Every other object is stored, classes, `Mock()` and callable instances included.
+- **Copying:** lists, dicts, sets and tuples written in a body are copied per build, nested ones too. Anything you pass at build time is used exactly as given, and never called.
+- **Markers:** a `sequence()`, `association()` or `transient()` works only as an attribute's whole value, never returned from a function or inside a container. An override can be a marker too.
 
 ```python
 from enum import Enum
+from unittest.mock import Mock
 
 from factory_bot import fake
 
@@ -70,109 +59,127 @@ class Status(Enum):
     ACTIVE = 1
 
 
+client = Mock()
+
+
 @factory(dict)
 def person():
-    f.first_name = fake.first_name  # called per build
+    f.first_name = fake.first_name  # a method: called per build
     f.email = lambda first_name: f"{first_name}@example.com".lower()
-    f.username = lambda first_name: first_name.lower()  # the same first_name
-    f.bio = fake.paragraph  # parameters all have defaults: nothing injected
+    f.username = lambda first_name: first_name.lower()  # sees the same first_name
     f.status = Status  # a class: stored
+    f.client = client  # not a function: stored
     f.tags = ["new"]  # copied per build
 
 
 someone = build(person)
 assert someone["email"] == f"{someone['username']}@example.com"
-assert someone["status"] is Status
+assert someone["status"] is Status and someone["client"] is client
 ```
 
-A marker only works as an attribute's whole value. Inside a list, or returned from a function, it's an error, because it would reach the model unevaluated. The one exception is `association()` called during a build: see [Associations](#associations).
+Each attribute is worked out at most once per build, so everything that depends on it sees the same value.
 
 
-## Gotchas
+## Declaring attributes
 
-### A callable you want stored needs a lambda
-
-Classes are stored, but every other callable is called: a function, a `Mock()`, a bound method. To store one, wrap it:
+**Sequences** count from 1, one step per build. The function gets the number first, then any attributes it names. Each sequence keeps its own count, an override doesn't use one up, and `reset_sequences()` restarts them all.
 
 ```python
-from unittest.mock import Mock
-
-client = Mock()
-
-
 @factory(dict)
-def service():
-    f.client = lambda: client  # f.client = client would store client()
+def page():
+    f.title = "Hello World"
+    f.slug = sequence(lambda n, title: f"{title.lower().replace(' ', '-')}-{n}")
 
 
-assert build(service)["client"] is client
+assert build(page)["slug"] == "hello-world-1"
+assert build(page, title="About")["slug"] == "about-2"
 ```
 
-### Bodies run once
-
-Code in a body runs once, at import, not per build. A timestamp or a random choice is frozen into the factory:
+**Traits** are named bundles of attributes, applied in the order listed.
 
 ```python
-import random
 from datetime import datetime
 
+from factory_bot import trait
+
 
 @factory(dict)
-def visit():
-    f.at = datetime.now()  # frozen: the time of import
-    f.seen_at = datetime.now  # per build
-    f.score = lambda: random.choice([1, 2, 3])  # per build
+def post():
+    f.status = "draft"
+
+    @trait
+    def published():
+        f.status = "published"
+        f.published_at = datetime.now
+
+    @trait
+    def pinned():
+        f.pinned = True
+
+
+assert build(post, "published", "pinned")["status"] == "published"
+assert build(post, "published", status="archived")["status"] == "archived"
 ```
 
-Calling `fake.x()`, `build()` or `create()` in a body is an error for this reason.
+**Transients** are inputs the model never sees. **Callbacks** get the object first, then any attributes they name, transients included. `@after_build` runs after the model is built; `@after_create` after it's saved.
 
-### `f` is write-only
+```python
+from factory_bot import after_build, transient
 
-`f` records what you assign; there's nothing to read back until a build happens. Take the other attribute as a parameter instead:
+
+@factory(dict)
+def badge():
+    f.label = "new"
+    f.loud = transient(False)
+
+    @after_build
+    def maybe_shout(badge, loud):
+        if loud:
+            badge["label"] = badge["label"].upper()
+
+
+assert build(badge) == {"label": "new"}
+assert build(badge, loud=True) == {"label": "NEW"}
+```
+
+Callbacks run parent first, then the child, then each trait in the order listed.
+
+
+## Child factories
+
+A child inherits its parent's model, attributes, traits, sequences and callbacks, and changes what it needs. Declare it with `parent=`, or nest a bare `@factory` in the parent's body as shorthand:
 
 ```python
 @factory(dict)
-def contact():
-    f.first_name = "Ann"
-    f.email = lambda first_name: f"{first_name}@example.com"  # not f.first_name
+def member():
+    f.name = "Ann"
+    f.role = "member"
+
+    @factory
+    def guest():
+        f.role = "guest"
+
+
+@factory(parent=member)
+def moderator():
+    f.role = "moderator"
+
+
+assert build(moderator) == {"name": "Ann", "role": "moderator"}
+assert build("guest") == {"name": "Ann", "role": "guest"}
 ```
 
-### Other objects are shared
-
-Only builtin containers are copied. A model instance or any other object in a body is the same object in every build. Build it in a lambda for a fresh one: `f.address = lambda: Address(city="Wellington")`.
-
-### Keyword names
-
-An attribute named like a Python keyword can be declared with `setattr(f, "from", "ann@example.com")`, but no lambda can take it as a parameter.
-
-
-## Strategies and callbacks
-
-| | returns | `after_build` | saved | `after_create` | associations |
-|---|---|---|---|---|---|
-| `build` | the object | runs | no | no | built |
-| `create` | the object | runs | yes | runs | created |
-| `attributes_for` | a dict | no | no | no | left out, unless passed |
-
-`build_list` and `create_list` call `build` or `create` once per object, with the same traits and overrides. Transients never appear in a result.
-
-`attributes_for` returns values as Python objects: a `date` stays a `date`, and a nested object stays an object. It's ready for a form or a constructor, not for JSON.
-
-A callback's first parameter is the object, whatever you name it. The rest are filled by name, transients included. Callbacks run parent first, then the child, then each trait in the order listed.
-
-`after_build` also runs on `create`, before the save, so anything that must be saved with the row belongs there. `after_create` never runs on `build`.
-
-`create` saves with `obj.save()`, or with whatever `persist_with` set: a function called with each object, or a SQLAlchemy session that gets `add(obj)` and `flush()`, never a commit. The setting is global, for every thread.
+`@factory(OtherModel, parent=member)` switches model too. A `parent=` child is a module-level handle you can import and type-check; a nested one is reached by its name.
 
 
 ## Associations
 
-`association(factory, *traits, **overrides)` makes another factory's object, with the parent's strategy: `create` creates it, and `build` and `attributes_for` build it.
+`association(factory, *traits, **overrides)` makes another factory's object with the parent's strategy: `create` creates it first, so it's saved before the row that points at it, and `build` and `attributes_for` build it.
 
 ```python
 from dataclasses import dataclass
 
-from factory_bot import association, attributes_for, create
+from factory_bot import association, create
 
 
 @dataclass
@@ -192,15 +199,6 @@ class Task:
         pass
 
 
-@dataclass
-class Profile:
-    account: Account
-    task: Task
-
-    def save(self):
-        pass
-
-
 @factory(Account)
 def account():
     f.plan = "free"
@@ -212,30 +210,109 @@ def task():
     f.account = association(account)
 
 
-@factory(Profile)
-def profile():
+@dataclass
+class Workspace:
+    account: Account
+    task: Task
+    items: list
+
+    def save(self):
+        pass
+
+
+@factory(Workspace)
+def workspace():
     f.account = association(account, plan="pro")
     f.task = lambda account: association(task, account=account)
+    f.item_count = transient(2)
+    f.items = lambda item_count: [association(task) for _ in range(item_count)]
 
 
-p = create(profile)
-assert p.task.account is p.account
+w = create(workspace)
+assert w.task.account is w.account
+assert len(w.items) == 2
 ```
 
-That last line is the dependent form. Called while a build is running, from a lambda or a callback, `association()` makes the object right away, with the parent's strategy. Use it when an association's overrides depend on another attribute, or for a list: `lambda item_count: [association(item) for _ in range(item_count)]`.
+`association()` called during a build, from a lambda or a callback, simply builds or creates with the parent's strategy. That's how an association takes overrides from other attributes (`task` above), and how the parent gets a list of them (`items`).
 
-Ways to replace it:
+To replace one at build time:
 
-- `build(task, account=acme)` uses your object.
-- `build(task, account=association(account, plan="pro"))` makes one your way.
-- `build(task, account_id=7)` skips the association and passes `account_id=7` to the model. Anything that depends on `account` then raises. This only applies to an attribute declared as `association(...)`.
-- `build(task, account=None)` makes none.
+- `account=acme` uses your object.
+- `account=association(account, plan="pro")` makes one your way.
+- `account_id=7` skips the association and passes `account_id=7` to the model. Anything that depends on `account` then raises. This applies only to an attribute declared as `association(...)`, and assumes the foreign key is named `<association>_id`: always true in Django, a convention in SQLAlchemy.
+- `account=None` makes none.
 
-`attributes_for` leaves associations out unless you pass them, but still builds one when another attribute depends on it.
 
-The `_id` rule assumes the foreign key is named `<association>_id`. Django always names it that. In SQLAlchemy it's only a convention: a relationship `author` over a column `writer_id` won't match, so pass `author=` there.
+## Strategies
 
-Two associations that make each other forever raise `circular association: book.author -> author.book -> book.author`.
+| | returns | `after_build` | saved | `after_create` | associations |
+|---|---|---|---|---|---|
+| `build` | the object | runs | no | no | built |
+| `create` | the object | runs | yes | runs | created |
+| `attributes_for` | a dict | no | no | no | left out unless you pass one |
+
+`build_list(factory, n, ...)` and `create_list(factory, n, ...)` make `n`, with the same traits and overrides. Every strategy takes traits and overrides the same way. Transients never appear in a result.
+
+`attributes_for` returns Python objects: a `date` stays a `date`. It suits a form or a constructor, not JSON.
+
+
+## Saving
+
+`create` saves with `obj.save()`, unless you call `persist_with`:
+
+- `persist_with(fn)` calls `fn(obj)`.
+- `persist_with(session)` adds each object to a SQLAlchemy `Session` or `scoped_session` and flushes, never commits.
+- `persist_with(None)` goes back to `obj.save()`.
+
+The setting is global. Under pytest, one made in a test or fixture is undone when that test or fixture ends.
+
+```python
+from factory_bot import persist_with
+
+saved = []
+persist_with(saved.append)
+
+
+@factory(dict)
+def event():
+    f.name = "launch"
+
+
+create(event)
+assert saved == [{"name": "launch"}]
+persist_with(None)
+```
+
+
+## Faker
+
+`fake` is a shared [Faker](https://faker.readthedocs.io) instance. Assign a method without calling it, and you get a new value every build; for arguments, use a lambda. Calling one in a body is an error, because it would freeze one value for every build.
+
+```python
+from factory_bot import seed
+
+
+@factory(dict)
+def profile():
+    f.name = fake.name
+    f.age = lambda: fake.random_int(min=18, max=90)
+
+
+seed(1234)
+first = build(profile)
+seed(1234)
+assert build(profile) == first
+```
+
+`seed(value)` makes the data reproducible outside pytest; it also clears `fake.unique`. Under pytest, the plugin seeds for you. `fake` is the only randomness it seeds, so prefer `fake.random_element(...)` to `random.choice(...)`.
+
+
+## Gotchas
+
+- **A body runs once.** `f.at = datetime.now()` is frozen at import; `f.at = datetime.now` is called per build. Calling `fake.x()`, `build()` or `create()` in a body is an error for this reason.
+- **`f` is write-only.** To use another attribute, take it as a parameter: `f.email = lambda first_name: ...`, not `f.first_name + ...`.
+- **Objects are shared.** Only containers written in a body are copied. A model instance in a body is the same object in every build; build it in a lambda for a fresh one.
+- **Keyword names.** `setattr(f, "from", "ann@example.com")` declares an attribute named like a Python keyword, but no lambda can take it as a parameter.
 
 
 ## Organizing factories
@@ -272,37 +349,34 @@ def user():
 import factories  # noqa: F401  # registers every factory
 ```
 
-Tests then use `build("user")`, or import the factory for types: `from factories import user`.
+Tests then use `build("user")`, or `from factories import user` for types.
 
 `import factories` works with pytest's default import mode when `tests/` has no `__init__.py`. If `tests/` is a package, write `from . import factories`. Under `--import-mode=importlib`, add `pythonpath = ["tests"]` to your pytest config.
 
-Define factories at module level, not in tests or fixtures: a factory defined in a fixture is defined again by the next test, and raises `already defined`. In a REPL, or before reloading the module, call `clear_factories()`.
+Define factories at module level, not in tests or fixtures, since names are global. In a REPL, or before reloading the module, call `clear_factories()`.
 
 
 ## Test isolation
 
-What the pytest plugin does before and after each test, and what's left to you:
+The pytest plugin:
 
-- **`fake` is reseeded** from the run's seed and the test's id, and `fake.unique` is cleared, so a test's fake data doesn't depend on what ran before it. This happens before fixtures run, so function-scoped fixtures get the test's data too. A module- or session-scoped fixture gets the seed of the first test that uses it, so its data can change with which tests run.
-- **The `persist_with` setting is restored** after the test, undoing anything the test or its function-scoped fixtures set. A module- or session-scoped fixture that calls it must undo it in its own teardown.
-- **Sequences keep counting** across tests: `user1` when a test runs alone can be `user7` in the suite. Restarting them per test would make two tests both create `user1`, which collides when rows survive between tests. If every test rolls back, turn it on:
+- **Reseeds `fake`** for every test and every fixture, at any scope, from the run's seed and its id. Each gets the same fake data alone, in the suite, in any order or under pytest-xdist. With pytest-randomly, each run picks a new seed, and `--randomly-seed=N` replays it.
+- **Undoes `persist_with`** when the test or fixture that called it ends.
+- **Leaves sequences counting** across tests, unless you ask. Restarting them makes two tests both create `user1`, which collides when rows survive between tests. If every test rolls back, turn it on:
 
   ```toml
   [tool.pytest.ini_options]
   factory_bot_reset_sequences = true
   ```
 
-  Either way, don't assert on a sequence value; pass the value you assert on as an override.
-- **Database rows** are your test framework's job. Django's `TestCase` and the SQLAlchemy fixture below both roll back.
+  The header shows the setting: `factory_bot: seed=0, reset_sequences=off`. Either way, don't assert on a sequence value; pass the value you assert on as an override.
 
-With pytest-randomly installed, each run picks a new seed; `--randomly-seed=N` (from the header) gets that run's data back.
-
-`fake` is the only randomness the plugin seeds. Prefer `fake.random_element(...)` to `random.choice(...)` in a lambda.
+Database rows are your test framework's job: Django's `TestCase` and the SQLAlchemy fixture below roll back.
 
 
 ## Type checkers
 
-`@factory(User)` returns a `Factory[User]`, so `build(user)`, `create(user)` and `build_list(user, 3)` are typed. A name, `build("user")`, gives `Any`, as does a child factory, which you can only reach by name.
+`@factory(User)` returns a `Factory[User]`, so `build(user)`, `create(user)` and `build_list(user, 3)` are typed. A name gives `Any`.
 
 ```python
 @dataclass
@@ -311,42 +385,29 @@ class Member:
 
 
 @factory(Member)
-def member():
+def typed_member():
     f.name = "Ann"
 
 
-m: Member = build(member)
+m: Member = build(typed_member)
 ```
 
-- **Fixture with the same name.** A pytest fixture called `user` shadows an imported `user` factory. Import the module instead and write `build(factories.user)`; passing the wrong thing raises `Expected a factory or a factory's name`.
-- **mypy `--strict`** wants a return type on bodies: `def user() -> None:`.
-- **pyright strict** reports a lambda's injected parameters as untyped. Where that matters, use an annotated `def`, injected the same way:
-
-```python
-@factory(dict)
-def receipt():
-    f.line_count = 2
-
-    def total(line_count: int) -> int:
-        return line_count * 10
-
-    f.total = total
-
-
-assert build(receipt)["total"] == 20
-```
+- Use a name where no handle is in reach: a nested child, or a factory defined later in the file.
+- A pytest fixture named `user` shadows an imported `user` factory. Import the module and write `build(factories.user)`.
+- mypy `--strict` wants a return type on bodies: `def user() -> None:`.
+- pyright strict reports a lambda's injected parameters as untyped. Where that matters, use an annotated `def`, injected the same way.
 
 
 ## Recipes
 
 ### Has-many
 
-When each child row points at its parent, create the parent first, then the children, from an `after_create` callback driven by a transient count:
+When each child row holds the key to its parent, the parent must be saved first. A transient count and an `after_create` callback create the children afterwards:
 
 ```python
 from dataclasses import field
 
-from factory_bot import after_create, create_list, trait, transient
+from factory_bot import after_create, create_list
 
 
 @dataclass
@@ -391,28 +452,11 @@ assert len(create(author, book_count=3).books) == 3
 assert len(create(author, "prolific").books) == 10
 ```
 
-`after_create` doesn't run on `build`, so a built author has no books.
-
-When the parent holds its children, as a list field or a relationship you assign, call `association()` in a lambda. It follows the strategy, so it works with `build` too:
-
-```python
-@factory(dict)
-def line_item():
-    f.sku = sequence(lambda n: f"SKU-{n}")
-
-
-@factory(dict)
-def invoice():
-    f.item_count = transient(2)
-    f.items = lambda item_count: [association(line_item) for _ in range(item_count)]
-
-
-assert len(build(invoice, item_count=5)["items"]) == 5
-```
+`after_create` doesn't run on `build`, so a built author has no books. When the parent holds the list instead, call `association()` in a lambda, as `items` does in [Associations](#associations).
 
 ### Django many-to-many
 
-Django won't take a many-to-many field in the constructor, and can't set one until the row has a primary key. Declare it as a transient, so it never reaches the constructor, and set it after the save:
+Django won't take a many-to-many field in the constructor, or set one before the row has a primary key. Make it a transient, and set it after the save:
 
 <!-- skip-doctest -->
 ```python
@@ -440,9 +484,9 @@ article_ = create(article, tags=[create(tag), create(tag)])
 assert article_.tags.count() == 2
 ```
 
-### Passwords
+### Django passwords
 
-Take the plain password as a transient and hash it in a lambda. The hash goes into the row's first INSERT, `build` gets it too, and the test still knows the password.
+Take the plain password as a transient and hash it in a lambda. The hash goes into the first INSERT, `build` gets it too, and the test still knows the password.
 
 <!-- skip-doctest -->
 ```python
@@ -462,16 +506,11 @@ def user():
 assert create(user, raw_password="hunter2").check_password("hunter2")
 ```
 
-Django's hashers are slow on purpose. In test settings, use a fast one:
-
-<!-- skip-doctest -->
-```python
-PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
-```
+Django's hashers are slow on purpose. In test settings, use a fast one: `PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]`.
 
 ### SQLAlchemy fixtures
 
-Point `create` at the test's session, inside a transaction that's rolled back afterwards. This is SQLAlchemy's recipe for joining a session to an outer transaction, plus one line:
+This fixture joins the test's session to an outer transaction that's rolled back, SQLAlchemy's own recipe, plus one line:
 
 <!-- skip-doctest -->
 ```python
@@ -497,15 +536,13 @@ def session(engine):
     with engine.connect() as connection:
         transaction = connection.begin()
         session = Session(bind=connection, join_transaction_mode="create_savepoint")
-        persist_with(session)  # the plugin undoes it after the test
+        persist_with(session)  # undone when the fixture ends
         yield session
         session.close()
         transaction.rollback()
 ```
 
-`create` adds and flushes, so ids and foreign keys are set, but never commits. Associations are flushed before the rows that point at them. `persist_with` also takes a `scoped_session`.
-
-With `MappedAsDataclass` models, a field declared `init=False` isn't a constructor argument, so a factory can't set it; set it in an `after_build` callback.
+With `MappedAsDataclass` models, a field declared `init=False` isn't a constructor argument, so set it in an `after_build` callback.
 
 ### Checking every factory
 
@@ -518,7 +555,7 @@ FactoryError: lint: 3 of 5 builds failed:
   build('ghost', 'vip'): FactoryError: Factory 'ghost': 'name' depends on 'nmae', which is not defined. Did you mean 'name'? (factories.py:20)
 ```
 
-Its builds are real: they use up sequence numbers, and `strategy="create"` saves rows. So run it in a test, inside your rollback:
+Its builds are real: they use up sequence numbers, and `strategy="create"` saves rows. Run it in a test, inside your rollback:
 
 <!-- skip-doctest -->
 ```python
@@ -537,128 +574,47 @@ def test_factories_create(session):  # or @pytest.mark.django_db
 
 ## Error messages
 
-A `FactoryError` names the factory it happened in, and most suggest the fix. An exception from your model or your lambdas keeps its type and gains notes naming the factory, the attribute and its line:
-
-```
-ZeroDivisionError: division by zero
-  note: while building factory 'boom', attribute 'value' (factories.py:292)
-```
-
-### When you build
-
-- `No factory named 'usr'. Did you mean 'user'?`
-
-  A typo, or the factories module wasn't imported.
-
-- `Factory 'user' has no trait 'admn'. Did you mean 'admin'? Traits: admin`
-
-  The list includes inherited traits.
-
-- `Expected a factory or a factory's name, not <class 'myapp.models.User'>. If a fixture or variable shadows the factory, use its name or its module: factories.user`
-
-  You passed the model, or a fixture shadowed the factory. See [Type checkers](#type-checkers).
-
-- `Factory 'user': 'email' depends on 'nmae', which is not defined. Did you mean 'name'? (factories.py:25)`
-
-  A lambda, sequence or callback has a parameter no attribute matches. If it's meant to be optional, give it a default.
-
-- `Factory 'account': circular dependency: slug -> url -> slug`
-
-  Attributes that need each other. `name -> name` means a lambda takes its own attribute; adjust a value in a callback instead.
-
-- `Factory 'post': 'author' is an association to 'usr', which is not a factory. Did you mean 'user'?`
-
-  Checked at build time, so the target can be defined after the factory that uses it.
-
-- `Factory 'book': circular association: book.author -> author.book -> book.author`
-
-  Each association makes the other. Pass one in, or set it to `None`.
+Every `FactoryError` names the factory it happened in, and most say how to fix it. An exception from your model or your functions keeps its type and gains notes naming the factory, the attribute and its line. These need more context than the message has room for:
 
 - `Factory 'book': 'byline' depends on 'author', which isn't made because author_id= was given. Pass author= as well.`
 
-  See [Associations](#associations).
+  `author_id=` skips the `author` association, so nothing that needs the author object can run. Pass both, or neither.
 
-- `Factory 'ticket': <sequence (factories.py:59)> was returned from a function, so it was never evaluated: a sequence(), association() or transient() works only as an attribute's whole value, never returned from a function or inside a container.`
+- `Factory 'user' is already defined (<full path>/tests/factories.py:4). To redefine it, e.g. in a REPL or after a reload, call clear_factories() first.`
 
-  Assign the marker itself: `f.code = sequence(...)`.
+  If the path is the very line being defined, the module was imported twice, under two names (`factories` and `tests.factories`). Fix the import, not the factory.
 
-- `Factory 'ticket': <association 'user'> is inside a list, so it was never evaluated: ...`
+- `Factory 'person': circular dependency: name -> name`
 
-  For a list of associations, build it in a lambda: `lambda: [association(user)]`.
+  A lambda takes its own attribute as a parameter: `f.name = lambda name: name.title()`. To adjust a value after it's worked out, use a callback.
 
 - `Factory 'account': can't create a dict: it has no save(). Give it a save() method, or call persist_with() with a function or a SQLAlchemy session.`
 
-  `create` doesn't know how to save. If the test should have a database, its fixture didn't run.
+  In a test that should have a database, the fixture that calls `persist_with` didn't run.
 
-- `lint() takes strategy='build' or 'create', not 'attributes_for'`
+- `'team__name': deep overrides aren't supported. Override the association instead: team=association("team", name=...)` (a note on the model's `TypeError`)
 
-A model's `TypeError` for an unknown keyword gains a hint:
+  There's no `__` syntax. Pass a whole association with its own overrides.
 
-```
-TypeError: User.__init__() got an unexpected keyword argument 'nmae'
-  note: while building factory 'member'
-  note: 'nmae' is not an attribute of factory 'member'. Did you mean 'name'?
-```
+- `Factory 'ticket': <sequence (factories.py:59)> was never evaluated: a sequence(), association() or transient() works only as an attribute's whole value, never returned from a function or inside a container.`
 
-Overrides like `team__name=` aren't supported; the note says to pass `team=association("team", name=...)`.
-
-### When you define
-
-- `Factory 'guest': fake.first_name() was called while the factory was being defined, so every build would get the same value. Pass the method instead, without parentheses: fake.first_name (or lambda: fake.first_name(...) for arguments)`
-- `Factory 'shelf': build('book') ran while a factory was being defined, so it would run once, at import. Use association('book'), which builds or creates to match the parent, or make it lazy: lambda: build('book')`
-- `Factory 'contact': can't read f.first_name: f only declares attributes. To use another attribute, take it as a parameter: lambda first_name: ...`
-- `f.name = ... only works inside a @factory body`
-
-  Also raised by `f` assigned in a lambda, which runs at build time.
-
-- `@factory needs a model or a parent: write @factory(User), @factory(dict) or @factory(parent=user) above def guest`
-
-  A bare `@factory` only declares a child, inside another factory.
-
-- `Factory 'guest': model 'User' is not callable`
-- `Factory 'user' is already defined (<full path>/tests/factories.py:22). To redefine it, e.g. in a REPL or after a reload, call clear_factories() first.`
-
-  Two factories share a name, or one module ran twice: from a fixture, a reload, or an import under two module names.
-
-- `Factory 'guest': trait 'vip' is already defined (factories.py:135)`
-- `def guest(f) takes no parameters: drop the parameter and import f (from factory_bot import f), and write @trait instead of @f.trait`
-
-  A body written for 0.0.1.
-
-- `@factory takes a def, not a lambda: the function's name names the factory`
-- `def guest must be a plain function: its body runs once, now`
-- `Factory 'guest': @factory def ghost must be directly inside the factory, not inside trait 'vip'`
-- `Factory 'guest': @after_build def greet() must take the instance first, then other attributes by name: def greet(guest, ...)`
-- `sequence() takes a function of the counter, e.g. sequence(lambda n: f"user{n}"), not 'user'`
-
-### When you set up saving
-
-- `persist_with() takes a session, not a sessionmaker. Pass the test's session, e.g. persist_with(session).`
-- `persist_with() takes a function, a SQLAlchemy session, or None to restore obj.save(); got Engine(sqlite://).`
-- `Factory 'guest': persist_with() sets the global save hook, so call it outside any factory body, e.g. in a fixture.`
+  Assign the marker itself, `f.code = sequence(...)`. For a list of associations, call `association()` in a lambda: `lambda: [association(user)]`.
 
 
 ## API at a glance
 
-Defining:
-
 | | |
 |---|---|
-| `@factory(Model)` | Register a factory named after the function; returns a `Factory[Model]`. Nested in a factory, bare `@factory` declares a child, and `@factory(Model)` a child with its own model. |
+| `@factory(Model)`, `@factory(parent=f)`, `@factory(Model, parent=f)` | Register a factory named after the function, returning a `Factory`. Nested bare `@factory` is a child of the enclosing factory. |
 | `@trait` | A named set of attributes inside a factory. |
-| `f.name = value` | Declare an attribute; see [the value rule](#the-value-rule). |
+| `f.name = value` | Declare an attribute: see [the value rule](#the-value-rule). |
 | `sequence(fn)` | `fn(n, **dependencies)` for n = 1, 2, 3... |
 | `association(factory, *traits, **overrides)` | Another factory's object. |
 | `transient(value)` | An input that never reaches the model. |
 | `@after_build`, `@after_create` | Callbacks: `fn(obj, **dependencies)`. |
-
-Using, where `factory` is a `Factory` or its name:
-
-| | |
-|---|---|
-| `build`, `create`, `attributes_for` `(factory, *traits, **overrides)` | One object, one saved object, or one dict. |
+| `build`, `create`, `attributes_for` `(factory, *traits, **overrides)` | One object, one saved object, or one dict. `factory` is a `Factory` or its name. |
 | `build_list`, `create_list` `(factory, n, *traits, **overrides)` | A list of `n`. |
 | `persist_with(fn \| session \| None)` | How `create` saves. |
 | `lint(*factories, strategy="build")` | Build every factory and trait; report every failure. |
-
-Housekeeping: `fake` (a shared `Faker`), `seed(value)`, `reset_sequences()`, `clear_factories()`, `Factory`, and `FactoryError`.
+| `fake`, `seed(value)` | The shared `Faker`, and its seed. |
+| `reset_sequences()`, `clear_factories()` | Restart every sequence; forget every factory. |
