@@ -62,7 +62,7 @@ A factory is a function that assigns attributes to `f`. Its body runs once, when
 
 ### Lazy attributes and dependencies
 
-A static value is used as-is. A callable is called on every build, and its parameters are filled with the other attributes of the same name, so one attribute can depend on another.
+A static value is used as-is, and so is a class. Any other callable is called on every build, and its parameters are filled with the other attributes of the same name, so one attribute can depend on another.
 
 ```python
 @factory(dict)

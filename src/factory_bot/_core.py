@@ -336,7 +336,8 @@ class _Evaluator:
             return value.next()
         if isinstance(value, _Association):
             return self.associate(value, name)
-        if callable(value):
+        # A class is stored, not called: f.status = Status means the Enum itself.
+        if callable(value) and not isinstance(value, type):
             return self.call(name, value)
         return _fresh(value)
 

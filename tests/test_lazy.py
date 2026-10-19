@@ -1,6 +1,9 @@
+import enum
+import functools
 import inspect
 import itertools
 import re
+from dataclasses import dataclass
 
 import pytest
 
@@ -56,11 +59,43 @@ def test_parameters_with_defaults_are_left_alone():
 def test_a_callable_without_an_inspectable_signature_has_no_dependencies():
     @factory(dict)
     def user():
+        f.top = functools.partial(max, [1, 2])
+
+    assert build("user") == {"top": 2}
+
+
+class Status(enum.Enum):
+    ACTIVE = "active"
+
+
+@dataclass
+class Address:
+    city: str
+
+
+class Meta(type):
+    def __call__(cls, *args, **kwargs):
+        raise AssertionError("a class is never called")
+
+
+class Handler(metaclass=Meta):
+    pass
+
+
+def test_a_class_is_stored_not_called():
+    @factory(dict)
+    def account():
+        f.status_type = Status
+        f.address_type = Address
+        f.handler = Handler
         f.meta = dict
 
-    first, second = build("user"), build("user")
-    assert first["meta"] == {}
-    assert first["meta"] is not second["meta"]
+    assert build("account") == {
+        "status_type": Status,
+        "address_type": Address,
+        "handler": Handler,
+        "meta": dict,
+    }
 
 
 def test_overrides_are_never_called():

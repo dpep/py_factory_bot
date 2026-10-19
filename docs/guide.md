@@ -49,7 +49,7 @@ Overrides may also name attributes the factory never declared; they go straight 
 Every attribute, wherever it was declared, becomes a value on each build by one rule:
 
 - **A marker** does its job. `sequence(fn)` calls `fn` with the next number of its own counter, starting at 1. `association("name", *traits, **overrides)` makes that factory's object. `transient(value)` resolves `value` by this same rule but keeps the result away from the model.
-- **A callable** is called, on every build. Each parameter without a default is filled with the attribute of the same name. Parameters with defaults, `*args` and `**kwargs` are left alone, and a callable with no readable signature, like `dict`, is called with nothing.
+- **A callable** is called, on every build, unless it's a class: a class is stored as-is. Each parameter without a default is filled with the attribute of the same name. Parameters with defaults, `*args` and `**kwargs` are left alone, and a callable with no readable signature is called with nothing.
 - **A list, dict or set** is copied, so builds never share one.
 - **Anything else** is used as-is, and every build gets that same object.
 - **An override** is used exactly as given. It's never called, even when it's a function.
@@ -97,9 +97,9 @@ The parentheses would call it right away, while the body runs, so the factory wo
 
 Drop the parentheses so the method itself is the value, or wrap a call that needs arguments in a lambda: `f.age = lambda: fake.random_int(min=18, max=90)`.
 
-### Assigning a class calls it
+### A class is stored, not called
 
-A class is callable, so the value rule calls it. `f.amount = Decimal` stores `Decimal("0")`, not the class:
+A class is a value like any other: `f.status = Status` stores the `Enum` class itself, and `f.kind = Decimal` stores `Decimal`. For an instance per build, call it in a lambda:
 
 ```python
 from decimal import Decimal
@@ -107,15 +107,14 @@ from decimal import Decimal
 
 @factory(dict)
 def price():
-    f.amount = Decimal
+    f.amount_type = Decimal
+    f.amount = lambda: Decimal("9.99")
 
 
-assert build("price") == {"amount": Decimal("0")}
+assert build("price") == {"amount_type": Decimal, "amount": Decimal("9.99")}
 ```
 
-A class with required parameters is worse: they're taken as dependencies, so `f.address = Address` fails with `'address' depends on 'city', which is not defined`.
-
-The same goes for anything callable you want stored rather than called: a class, an `Enum` class, a `Mock()`, a handler function. Wrap it in a lambda that returns it:
+Any other callable is called. To store one, like a `Mock()` or a handler function, wrap it in a lambda that returns it:
 
 ```python
 from unittest.mock import Mock
@@ -126,7 +125,6 @@ client = Mock()
 @factory(dict)
 def service():
     f.client = lambda: client  # f.client = client would store client()
-    f.amount_type = lambda: Decimal
 
 
 assert build("service")["client"] is client
@@ -496,7 +494,7 @@ Every `FactoryError` names the factory involved, and most suggest the fix. The o
 
 - `Factory 'user': 'email' depends on 'frist_name', which is not defined. Did you mean 'first_name'? (factories.py:15)`
 
-  A lazy attribute or callback has a parameter that no attribute matches, and the location is the callable's first line. If the parameter was meant to be optional, give it a default. A class assigned as a value gives this error for its required fields: see [Assigning a class calls it](#assigning-a-class-calls-it).
+  A lazy attribute or callback has a parameter that no attribute matches, and the location is the callable's first line. If the parameter was meant to be optional, give it a default.
 
 - `Factory 'account': circular dependency: slug -> url -> slug`
 
