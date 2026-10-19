@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 import pytest
 from support.models import Post, User
 
@@ -97,6 +99,52 @@ def test_persist_with_a_callable_session_treats_it_as_a_session():
 
     point_ = create("point")
     assert session.calls == [("add", point_), ("flush",)]
+
+
+def test_persist_with_a_mock_treats_it_as_a_session():
+    # Declined: a Mock has add and flush, so it reads as a session. A scoped_session is
+    # callable and session-like too, so "a session wins" must stay; a Mock is just ambiguous.
+    hook = Mock()
+    persist_with(hook)
+
+    @factory(dict)
+    def point():
+        f.x = 1
+
+    point_ = create("point")
+    hook.add.assert_called_once_with(point_)
+    hook.flush.assert_called_once_with()
+    hook.assert_not_called()
+
+
+class AsyncSession(Session):
+    async def flush(self):
+        raise AssertionError("never awaited")
+
+
+class AsyncSessionmaker:
+    class_ = AsyncSession
+
+    def __call__(self):
+        return self.class_()
+
+
+ASYNC_FIX = (
+    r" Pass the sync session behind the test's AsyncSession, persist_with\(session\.sync_session\),"
+    r" and call create\(\) inside await session\.run_sync\(\.\.\.\)\.$"
+)
+
+
+def test_an_async_session_is_rejected_with_the_fix():
+    message = r"^persist_with\(\) can't await an AsyncSession's flush\(\)\." + ASYNC_FIX
+    with pytest.raises(FactoryError, match=message):
+        persist_with(AsyncSession())
+
+
+def test_an_async_sessionmaker_is_rejected_with_the_fix():
+    message = r"^persist_with\(\) takes a session, not a sessionmaker\." + ASYNC_FIX
+    with pytest.raises(FactoryError, match=message):
+        persist_with(AsyncSessionmaker())
 
 
 # A set has add() but no flush(): it is neither a session nor a function.

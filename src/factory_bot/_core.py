@@ -578,15 +578,20 @@ def persist_with(hook, /):
         raise FactoryError(
             "persist_with() sets the global save hook, so call it outside any factory body, e.g. in a fixture."
         )
+    maker = getattr(hook, "class_", None)
     if _is_session(hook):
+        if _is_async(hook.flush):
+            raise FactoryError(
+                f"persist_with() can't await an AsyncSession's flush(). {_ASYNC_FIX}"
+            )
         _set_persist_hook(lambda obj: _add_and_flush(hook, obj))
-    elif _is_session(
-        getattr(hook, "class_", None)
-    ):  # callable, so it would pass as a hook
-        raise FactoryError(
-            "persist_with() takes a session, not a sessionmaker."
-            " Pass the test's session, e.g. persist_with(session)."
+    elif _is_session(maker):  # callable, so it would pass as a hook
+        fix = (
+            _ASYNC_FIX
+            if _is_async(getattr(maker, "flush", None))
+            else "Pass the test's session, e.g. persist_with(session)."
         )
+        raise FactoryError(f"persist_with() takes a session, not a sessionmaker. {fix}")
     elif hook is None or callable(hook):
         _set_persist_hook(hook)
     else:
@@ -595,6 +600,13 @@ def persist_with(hook, /):
             f" got {hook!r}."
         )
     return hook
+
+
+# Its sync session alone fails outside run_sync: the async driver needs SQLAlchemy's greenlet.
+_ASYNC_FIX = (
+    "Pass the sync session behind the test's AsyncSession, persist_with(session.sync_session),"
+    " and call create() inside await session.run_sync(...)."
+)
 
 
 # The seam the pytest plugin reads and restores the hook through.

@@ -16,7 +16,9 @@
 
 ### Added
 
-- `create` builds, then saves: `obj.save()` by default. `persist_with(fn)` saves with a function instead, and `persist_with(session)` adds and flushes to a SQLAlchemy `Session` or `scoped_session`, never committing, so the test's transaction still decides. `persist_with(None)` restores `obj.save()`.
+<!-- lane: hunt2-core -->
+- `create` builds, then saves: `obj.save()` by default. `persist_with(fn)` saves with a function instead, and `persist_with(session)` adds and flushes to a SQLAlchemy `Session` or `scoped_session`, never committing, so the test's transaction still decides. `persist_with(None)` restores `obj.save()`. An `AsyncSession` or `async_sessionmaker` is an error naming the fix: its `sync_session`, with `create()` called inside `await session.run_sync(...)`.
+<!-- /lane -->
 - `build_list` and `create_list`.
 - `association(factory, *traits, **overrides)` makes another factory's object with the parent's strategy: built for `build`, created first for `create`. Called during a build, from a lambda or a callback, it makes the object right away, for associations that depend on other attributes or come in lists. `attributes_for` leaves associations out unless you pass them.
 <!-- lane: hunt2-core -->
