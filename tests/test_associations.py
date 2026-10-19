@@ -255,3 +255,29 @@ def test_a_dependent_of_a_skipped_association_says_why(books):
     )
     with pytest.raises(FactoryError, match=f"^{re.escape(message)}"):
         build("signed", author_id=7)
+
+
+def test_an_association_given_with_its_id_is_made_and_both_pass(books):
+    assert build("book", author=association("author"), author_id=7) == {
+        "title": "Dune",
+        "author": {"name": "Ann"},
+        "author_id": 7,
+    }
+
+
+def test_an_unknown_association_called_from_a_callback_names_no_attribute():
+    @factory(User)
+    def user():
+        pass
+
+    @factory(Post)
+    def post():
+        f.title = "Hello"
+
+        @after_build
+        def add_author(post):
+            post.author = association("usr")
+
+    message = r"^Factory 'post': an association to 'usr', which is not a factory\. Did you mean 'user'\?$"
+    with pytest.raises(FactoryError, match=message):
+        build("post")
