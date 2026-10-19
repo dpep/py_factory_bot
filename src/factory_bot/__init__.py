@@ -10,7 +10,7 @@ from ._core import (
 from ._fake import fake, seed
 
 __author__ = "dpepper"
-__version__ = "0.0.0"
+__version__ = "0.0.1"
 
 __all__ = [
     "FactoryError",
