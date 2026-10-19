@@ -1,4 +1,5 @@
 import difflib
+import functools
 import inspect
 import itertools
 import os
@@ -618,9 +619,9 @@ def _marker_in(value):
 
 
 def _is_lazy(value):
-    """Whether a value written in a body is called per build, rather than stored."""
-    # A class is stored, not called: f.status = Status means the Enum itself.
-    return callable(value) and not isinstance(value, type)
+    """Functions are called per build; every other object, callable or not, is stored."""
+    # partial is named: it counts as a routine only from 3.14, where it gained __get__.
+    return inspect.isroutine(value) or isinstance(value, functools.partial)
 
 
 def _source(value):

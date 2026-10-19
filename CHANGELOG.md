@@ -5,7 +5,9 @@
 ### What you must do
 
 - Rewrite factory and trait bodies without the `f` parameter: `from factory_bot import f`, `def user():`, and `@trait` instead of `@f.trait`. Applies if you wrote factories for 0.0.1. An old-style body raises an error showing the new form.
-- Write `lambda: SomeClass()` where you want a new instance per build. Applies if you assigned a class as a value: a class is now stored, not called, so `f.status = Status` gives the `Enum` class.
+<!-- lane: sus2-core -->
+- Wrap a class or other callable object in a lambda if you want it called per build: `lambda: SomeClass()`, `lambda: handler()`. Applies if you assigned one as a value: functions (defs, lambdas, methods, builtins like `datetime.now`, `functools.partial`) are called per build, and every other object is stored, so `f.status = Status` gives the `Enum` class and `f.client = Mock()` gives that `Mock`.
+<!-- /lane -->
 - Drop the parentheses from `fake` calls in bodies (`f.name = fake.first_name`), or wrap a call that needs arguments in a lambda. Applies if a body calls `fake.x()`: that gave every build the same value, and is now an error.
 - Replace `build(...)` or `attributes_for(...)` called directly in a body with `association(...)`, or wrap it in a lambda. Applies if a body calls one: it ran once, at import, so every build shared one object. It's now an error.
 - Rename or remove one of the two. Applies if a factory defines two traits with the same name: the second used to replace the first silently, and is now an error.

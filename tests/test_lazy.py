@@ -1,9 +1,14 @@
+import datetime
 import enum
 import functools
 import inspect
 import itertools
+import operator
 import re
+import time
+import uuid
 from dataclasses import dataclass
+from unittest.mock import MagicMock, Mock
 
 import pytest
 
@@ -13,6 +18,7 @@ from factory_bot import (
     build,
     f,
     factory,
+    fake,
     sequence,
     transient,
 )
@@ -96,6 +102,81 @@ def test_a_class_is_stored_not_called():
         "handler": Handler,
         "meta": dict,
     }
+
+
+class _Thing:
+    def method(self):
+        return 1
+
+    @staticmethod
+    def static():
+        return 2
+
+    @classmethod
+    def klass(cls):
+        return 3
+
+
+class _Handler:
+    def __call__(self):
+        return "handled"
+
+
+def _defined():
+    return 1
+
+
+CALLED = {
+    "lambda": lambda: 1,
+    "def": _defined,
+    "bound method": _Thing().method,
+    "staticmethod": _Thing.static,
+    "classmethod": _Thing.klass,
+    "datetime.now": datetime.datetime.now,
+    "time.time": time.time,
+    "uuid.uuid4": uuid.uuid4,
+    "a builtin's bound method": {}.copy,
+    "partial": functools.partial(_defined),
+    "functools.cache": functools.cache(_defined),
+    "fake.first_name": fake.first_name,
+    "fake.unique.first_name": fake.unique.first_name,
+}
+STORED = {
+    "Mock()": Mock(),
+    "MagicMock()": MagicMock(),
+    "a callable instance": _Handler(),
+    "operator.itemgetter": operator.itemgetter(0),
+    "a class": _Thing,
+    "an Enum member": Status.ACTIVE,
+}
+
+
+@pytest.mark.parametrize("value", CALLED.values(), ids=CALLED)
+def test_a_function_is_called_on_every_build(value):
+    @factory(dict)
+    def thing():
+        f.value = value
+
+    assert build("thing")["value"] is not value
+
+
+@pytest.mark.parametrize("value", STORED.values(), ids=STORED)
+def test_every_other_object_is_stored(value):
+    @factory(dict)
+    def thing():
+        f.value = value
+
+    assert build("thing")["value"] is value
+
+
+def test_fake_written_in_a_body_is_called_on_every_build():
+    @factory(dict)
+    def user():
+        f.first = fake.first_name
+        f.unique = fake.unique.first_name
+        f.optional = fake.optional.first_name
+
+    assert all(isinstance(v, (str, type(None))) for v in build("user").values())
 
 
 def test_overrides_are_never_called():
@@ -205,13 +286,8 @@ def test_a_marker_returned_by_a_function_is_an_error(returns, strategy):
 
 
 def test_a_callables_parameters_are_read_once_across_builds(monkeypatch):
-    class Stamp:
-        __slots__ = ()  # no weak reference, so it can't be cached
-
-        def __call__(self):
-            return 1
-
-    email, stamp = lambda first_name: f"{first_name}@x.io", Stamp()
+    # A method-wrapper has no weak reference, so it can't be cached.
+    email, stamp = lambda first_name: f"{first_name}@x.io", "abc".__len__
     read = []
     signature = inspect.signature
     monkeypatch.setattr(
@@ -225,5 +301,5 @@ def test_a_callables_parameters_are_read_once_across_builds(monkeypatch):
         f.stamp = stamp
 
     for _ in range(3):
-        assert build("user") == {"first_name": "Ann", "email": "Ann@x.io", "stamp": 1}
+        assert build("user") == {"first_name": "Ann", "email": "Ann@x.io", "stamp": 3}
     assert (read.count(email), read.count(stamp)) == (1, 3)
