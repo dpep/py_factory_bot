@@ -3,6 +3,7 @@ name: Python
 on:
   push:
     branches: [ main ]
+    tags: '*'
   pull_request:
     types: [ opened, synchronize ]
 
@@ -19,7 +20,7 @@ jobs:
         cache: pip
     - name: install dependencies
       run: pip install -e .[test]
-    - run: pytest
+    - run: script/check.sh
 
 
     # build and publish

@@ -8,3 +8,6 @@ sdist
 *.pyc
 .coverage
 .pytest_cache
+.venv
+.claude/worktrees
+.ruff_cache
