@@ -45,6 +45,37 @@ def test_a_trait_inside_a_trait_is_rejected():
                     pass
 
 
+def test_a_duplicate_trait_name_is_rejected():
+    message = r"^Factory 'user': trait 'admin' is already defined \(test_dsl\.py:\d+\)$"
+    with pytest.raises(FactoryError, match=message):
+
+        @factory(dict)
+        def user():
+            @trait
+            def admin():
+                f.admin = True
+
+            @trait
+            def admin():  # noqa: F811
+                f.role = "admin"
+
+
+def test_a_child_may_redefine_its_parents_trait():
+    @factory(dict)
+    def user():
+        @trait
+        def admin():
+            f.admin = True
+
+        @factory
+        def guest():
+            @trait
+            def admin():
+                f.admin = False
+
+    assert build("guest", "admin") == {"admin": False}
+
+
 def test_a_body_that_raises_registers_nothing():
     with pytest.raises(RuntimeError):
 

@@ -5,7 +5,7 @@ from collections.abc import Callable
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 
-from ._core import FactoryError, _Definition, _register, _set_to_create
+from ._core import FactoryError, _Definition, _register, _set_to_create, _where
 
 Body = TypeVar("Body", bound=Callable[[], object])
 Fn = TypeVar("Fn", bound=Callable[..., Any])
@@ -50,6 +50,10 @@ def trait(body: Body) -> Body:
     """Declare a named set of attributes inside a factory, applied with build("user", "admin")."""
     _check_body(body, "trait")
     owner = _current(f"@trait def {body.__name__}")
+    if existing := owner.traits.get(body.__name__):
+        raise FactoryError(
+            f"Factory {owner.name!r}: trait {body.__name__!r} is already defined{_where(existing.body)}"
+        )
     definition = _Definition(body.__name__, None, body, kind="trait")
     _run_body(definition, body)
     owner.traits[body.__name__] = definition
