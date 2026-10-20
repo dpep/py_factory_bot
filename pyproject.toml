@@ -38,7 +38,7 @@ dev = [
   "ruff",
   "pyright[nodejs]",  # the nodejs extra ships node as a wheel, so no system node is needed
   "django",
-  "sqlalchemy >= 2",
+  "sqlalchemy >= 2.1.5",
 ]
 
 [tool.hatch.version]
