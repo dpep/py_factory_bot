@@ -34,6 +34,7 @@ Changelog = "https://github.com/dpep/py_factory_bot/blob/main/CHANGELOG.md"
 dev = [
   "pytest >= 9.1.1",
   "pytest-randomly",
+  "pytest-xdist",  # test_pytest_plugin checks the same data under xdist; it skips without it
   "coverage[toml]",
   "ruff",
   "pyright[nodejs]",  # the nodejs extra ships node as a wheel, so no system node is needed
