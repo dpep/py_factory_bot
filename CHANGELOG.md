@@ -32,6 +32,7 @@
 - An `async def` or a generator function as an attribute, a sequence's function or a callback is an error, and so is a function that returns a coroutine, instead of handing the model an un-awaited coroutine or an unrun generator.
 - `seed()` also clears `fake.unique`, so the same seed gives the same data whatever ran before. `fake.seed(...)` is an error pointing at `factory_bot.seed(...)`, instead of Faker's pointing at `Faker.seed()`, which doesn't seed `fake`.
 - A lazy attribute's positional-only parameters are injected like the others.
+- On Python 3.14+, a function whose annotations name a type imported only under `if TYPE_CHECKING:` works as a lazy attribute, a sequence's function or a callback, instead of raising `NameError`: factory_bot reads its parameters without evaluating annotations.
 - Errors say where they happened. A `FactoryError` names the factory, the innermost when builds nest. An exception from a model, lambda or callback keeps its type and gains notes naming the factory and attribute with its file:line. A model's unknown-keyword `TypeError` suggests the attribute you probably meant.
 - "Factory 'user' is already defined" shows the first definition's full path and suggests `clear_factories()` for a REPL or a reload.
 - Reading `f.x` raises an `AttributeError` too, so `hasattr(f, ...)`, `inspect.unwrap` and doctest work.

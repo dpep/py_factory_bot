@@ -1,14 +1,16 @@
 import enum
 import functools
-import inspect
 import itertools
 import re
+import sys
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import pytest
 
 from factory_bot import (
     FactoryError,
+    _core,
     after_build,
     attributes_for,
     build,
@@ -18,6 +20,9 @@ from factory_bot import (
     sequence,
     transient,
 )
+
+if TYPE_CHECKING:
+    from decimal import Decimal  # noqa: TC004  # only 3.14+ tests use it, unevaluated
 
 
 def test_callables_are_called_on_every_build():
@@ -64,6 +69,52 @@ def test_a_callable_without_an_inspectable_signature_has_no_dependencies():
         f.top = functools.partial(max, [1, 2])
 
     assert build("user") == {"top": 2}
+
+
+# Below 3.14 an unimported annotation fails at the def itself, before factory_bot sees it.
+@pytest.mark.skipif(sys.version_info < (3, 14), reason="deferred annotations (PEP 649)")
+def test_an_annotation_imported_only_for_type_checkers_is_never_evaluated():
+    def price(n: Decimal, currency: Decimal) -> Decimal:
+        return f"{n} {currency}"
+
+    def make(**attributes: Decimal) -> Decimal:
+        return attributes
+
+    @factory(make)
+    def item():
+        f.currency = "EUR"
+        f.price = sequence(price)
+        f.label = lambda price: price
+
+        @after_build
+        def check(item: Decimal, currency: Decimal) -> None:
+            item["checked"] = currency
+
+    assert build(item) == {
+        "currency": "EUR",
+        "price": "1 EUR",
+        "label": "1 EUR",
+        "checked": "EUR",
+    }
+
+
+@pytest.mark.skipif(sys.version_info < (3, 14), reason="deferred annotations (PEP 649)")
+def test_an_error_showing_a_signature_never_evaluates_its_annotations():
+    with pytest.raises(FactoryError, match=r"def item\(price\) takes no parameters"):
+
+        @factory(dict)
+        def item(price: Decimal):
+            pass
+
+    with pytest.raises(
+        FactoryError, match=r"def check\(\*, price: Decimal\) -> None must take"
+    ):
+
+        @factory(dict)
+        def order():
+            @after_build
+            def check(*, price: Decimal) -> None:
+                pass
 
 
 class Status(enum.Enum):
@@ -220,9 +271,11 @@ def test_a_callables_parameters_are_read_once_across_builds(monkeypatch):
     # A method-wrapper has no weak reference, so it can't be cached.
     email, stamp = lambda first_name: f"{first_name}@x.io", "abc".__len__
     read = []
-    signature = inspect.signature
+    reader = _core._read_dependencies
     monkeypatch.setattr(
-        inspect, "signature", lambda fn: read.append(fn) or signature(fn)
+        _core,
+        "_read_dependencies",
+        lambda fn, skip: read.append(fn) or reader(fn, skip),
     )
 
     @factory(dict)

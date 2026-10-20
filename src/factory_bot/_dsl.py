@@ -12,6 +12,7 @@ from ._core import (
     _lookup,
     _name_of,
     _register,
+    _signature,
     _stack,
     _takes_leading_argument,
     _where,
@@ -153,7 +154,7 @@ def _check_body(body, kind):
         raise FactoryError(
             f"def {name} must be a plain function: its body runs once, now"
         )
-    if params := inspect.signature(body).parameters:
+    if params := _signature(body).parameters:
         raise FactoryError(
             f"def {name}({', '.join(params)}) takes no parameters: drop the parameter and import f"
             " (from factory_bot import f), and write @trait instead of @f.trait"
@@ -188,7 +189,7 @@ def _is_body(obj):
     # parameter named f is the pre-0.0.2 `def user(f)` body; `def make_point(x)` is a model.
     if not inspect.isfunction(obj):
         return False
-    params = list(inspect.signature(obj).parameters)
+    params = list(_signature(obj).parameters)
     return params in ([], ["f"])
 
 
@@ -199,7 +200,7 @@ def _callback(kind: str) -> Callable[[Fn], Fn]:
         owner = _current(what, kinds=("factory", "trait"))
         if not _takes_leading_argument(fn):
             factory_name = _defining_factory()
-            shown = f"{what}{inspect.signature(fn)}" if name and callable(fn) else what
+            shown = f"{what}{_signature(fn)}" if name and callable(fn) else what
             raise FactoryError(
                 f"{shown} must take the instance first,"
                 f" then other attributes by name: def {name or 'callback'}({factory_name}, ...)",

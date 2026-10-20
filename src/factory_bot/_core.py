@@ -6,12 +6,16 @@ import inspect
 import itertools
 import os
 import re
+import sys
 import types
 import weakref
 from collections.abc import Callable
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Generic, Literal, Protocol, TypeVar, overload
+
+if sys.version_info >= (3, 14):
+    import annotationlib
 
 _registry: dict[str, "_Definition"] = {}
 _sequences: weakref.WeakSet["_Sequence"] = weakref.WeakSet()
@@ -768,10 +772,17 @@ def _dependencies(fn, skip):
     return by_skip[skip]
 
 
+def _signature(fn):
+    """fn's parameters, its annotations unevaluated: from 3.14 they may name a TYPE_CHECKING import."""
+    if sys.version_info >= (3, 14):
+        return inspect.signature(fn, annotation_format=annotationlib.Format.FORWARDREF)
+    return inspect.signature(fn)
+
+
 def _read_dependencies(fn, skip):
     # Only required params: fake.paragraph(nb_sentences=3) must not be injected.
     try:
-        params = list(inspect.signature(fn).parameters.values())[skip:]
+        params = list(_signature(fn).parameters.values())[skip:]
     except (TypeError, ValueError):  # some builtins (dict, str) have no signature
         return (), ()
     required = [p for p in params if p.default is p.empty]
@@ -799,7 +810,7 @@ def _takes_leading_argument(fn):
     if not callable(fn):
         return False
     try:
-        params = inspect.signature(fn).parameters.values()
+        params = _signature(fn).parameters.values()
     except ValueError:  # no inspectable signature; trust it
         return True
     first = next(iter(params), None)
