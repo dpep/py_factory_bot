@@ -35,7 +35,7 @@
 - A lazy attribute's positional-only parameters are injected like the others.
 - On Python 3.14+, a function whose annotations name a type imported only under `if TYPE_CHECKING:` works as a lazy attribute, a sequence's function or a callback, instead of raising `NameError`: factory_bot reads its parameters without evaluating annotations.
 - Errors say where they happened. A `FactoryError` names the factory, the innermost when builds nest. An exception from a model, lambda or callback keeps its type and gains notes naming the factory and attribute with its file:line. A model's unknown-keyword `TypeError` suggests the attribute you probably meant.
-- "Factory 'user' is already defined" shows the first definition's full path and suggests `clear_factories()` for a REPL or a reload.
+- "Factory 'user' is already defined" shows the first definition's full path and suggests `clear_factories()` for a REPL or a reload; when that path is the line being defined, it says the file was imported under two module names.
 - Reading `f.x` raises an `AttributeError` too, so `hasattr(f, ...)`, `inspect.unwrap` and doctest work.
 - A one-parameter function, `def make_point(x)`, can be a model; only a lone parameter named `f` is read as an old-style body.
 

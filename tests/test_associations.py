@@ -262,7 +262,7 @@ def test_a_dependent_of_a_skipped_association_says_why(books):
 
     message = (
         "Factory 'signed': 'byline' depends on 'author', which isn't made because author_id= was given."
-        " Pass author= as well."
+        " Pass author= as well, or drop author_id=."
     )
     with pytest.raises(FactoryError, match=f"^{re.escape(message)}"):
         build("signed", author_id=7)

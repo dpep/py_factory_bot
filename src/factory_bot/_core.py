@@ -291,9 +291,17 @@ def _register(definition):
     for d in definition.tree():
         existing = _registry.get(d.name) or seen.get(d.name)
         if existing:
+            first, again = existing.body, d.body
+            same_line = _where(first, full=True) == _where(again, full=True)
+            if same_line and first.__module__ != again.__module__:
+                fix = (
+                    f": the same file was imported twice, as {first.__module__!r}"
+                    f" and as {again.__module__!r}. Import it under one name."
+                )
+            else:
+                fix = ". To redefine it, e.g. in a REPL or after a reload, call clear_factories() first."
             raise FactoryError(
-                f"Factory {d.name!r} is already defined{_where(existing.body, full=True)}."
-                " To redefine it, e.g. in a REPL or after a reload, call clear_factories() first."
+                f"Factory {d.name!r} is already defined{_where(first, full=True)}{fix}"
             )
         seen[d.name] = d
     _registry.update(seen)
@@ -365,6 +373,11 @@ class _Evaluator:
         if name in self.values:
             return self.values[name]
         if name in self.resolving:
+            if self.resolving[-1] == name:
+                raise self.error(
+                    f"{name!r} takes itself as a parameter."
+                    " To adjust a value once it's worked out, use @after_build."
+                )
             cycle = " -> ".join([*self.resolving[self.resolving.index(name) :], name])
             raise self.error(f"circular dependency: {cycle}")
         self.resolving.append(name)
@@ -424,7 +437,7 @@ class _Evaluator:
             if dep in self.plan.replaced:
                 raise self.error(
                     f"{name!r} depends on {dep!r}, which isn't made because {self.plan.replaced[dep]}= was given."
-                    f" Pass {dep}= as well."
+                    f" Pass {dep}= as well, or drop {self.plan.replaced[dep]}=."
                 )
             if dep not in self.plan.definitions:
                 raise self.error(
@@ -651,7 +664,8 @@ def _persist(evaluator, obj):
     if not hasattr(obj, "save"):
         raise evaluator.error(
             f"can't create a {type(obj).__name__}: it has no save()."
-            " Give it a save() method, or call persist_with() with a function or a SQLAlchemy session."
+            " Give it a save() method, or call persist_with() with a function or a SQLAlchemy session"
+            " (in a test with a database, the fixture that calls it didn't run)."
         )
     obj.save()
 

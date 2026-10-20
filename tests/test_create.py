@@ -55,7 +55,8 @@ def test_an_object_without_save_names_both_fixes():
     with pytest.raises(
         FactoryError,
         match=r"^Factory 'point': can't create a dict: it has no save\(\)\. "
-        r"Give it a save\(\) method, or call persist_with\(\) with a function or a SQLAlchemy session\.$",
+        r"Give it a save\(\) method, or call persist_with\(\) with a function or a SQLAlchemy session"
+        r" \(in a test with a database, the fixture that calls it didn't run\)\.$",
     ):
         create("point")
 

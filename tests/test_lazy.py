@@ -188,6 +188,19 @@ def test_an_undefined_dependency_names_the_attribute_and_suggests_a_fix():
         build("broken")
 
 
+def test_an_attribute_that_takes_itself_points_at_a_callback():
+    @factory(dict)
+    def person():
+        f.name = lambda name: name.title()
+
+    message = (
+        "Factory 'person': 'name' takes itself as a parameter."
+        " To adjust a value once it's worked out, use @after_build."
+    )
+    with pytest.raises(FactoryError, match=f"^{re.escape(message)}$"):
+        build("person")
+
+
 def test_a_circular_dependency_shows_the_cycle():
     @factory(dict)
     def cyclic():

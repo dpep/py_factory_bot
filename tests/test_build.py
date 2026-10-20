@@ -1,3 +1,4 @@
+import importlib.util
 import re
 
 import pytest
@@ -120,6 +121,26 @@ def test_bare_decorator_names_the_fix():
         @factory
         def user():
             pass
+
+
+def test_a_module_imported_under_two_names_says_so(tmp_path):
+    path = tmp_path / "factories.py"
+    path.write_text(
+        "from factory_bot import factory\n\n@factory(dict)\ndef user():\n    pass\n"
+    )
+
+    def load(name):
+        spec = importlib.util.spec_from_file_location(name, path)
+        assert spec and spec.loader
+        spec.loader.exec_module(importlib.util.module_from_spec(spec))
+
+    load("factories")
+    message = (
+        f"Factory 'user' is already defined ({path}:3): the same file was imported twice,"
+        " as 'factories' and as 'tests.factories'. Import it under one name."
+    )
+    with pytest.raises(FactoryError, match=f"^{re.escape(message)}$"):
+        load("tests.factories")
 
 
 def test_model_must_be_callable():
