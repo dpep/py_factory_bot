@@ -238,17 +238,17 @@ def test_reading_f_at_build_time_names_the_factory_and_the_fix():
 
 
 @pytest.mark.parametrize(
-    "returns",
+    ("returns", "message"),
     [
-        lambda: sequence(lambda n: n),
-        lambda: transient(1),
-        lambda: [sequence(lambda n: n)],
-        lambda: {"k": (transient(1),)},
+        (lambda: sequence(lambda n: n), r"<sequence .+> was returned by a function"),
+        (lambda: transient(1), r"<transient 1> was returned by a function"),
+        (lambda: [sequence(lambda n: n)], r"<sequence .+> is inside a container"),
+        (lambda: {"k": (transient(1),)}, r"<transient 1> is inside a container"),
     ],
     ids=["sequence", "transient", "in a list", "in a dict's tuple"],
 )
 @pytest.mark.parametrize("strategy", [build, attributes_for])
-def test_a_marker_returned_by_a_function_is_an_error(returns, strategy):
+def test_a_marker_returned_by_a_function_is_an_error(returns, message, strategy):
     @factory(dict)
     def user():
         f.name = returns
@@ -256,15 +256,25 @@ def test_a_marker_returned_by_a_function_is_an_error(returns, strategy):
     with pytest.raises(FactoryError) as excinfo:
         strategy("user")
     assert re.fullmatch(
-        r"Factory 'user': <\w+ .+> was never evaluated:"
-        r" a sequence\(\), association\(\) or transient\(\) works only as an attribute's"
-        r" whole value, never returned from a function or inside a container\.",
+        rf"Factory 'user': {message}, which never evaluates it: .+\.",
         str(excinfo.value),
     )
     assert re.fullmatch(
         r"while building factory 'user', attribute 'name' \(test_lazy\.py:\d+\)",
         excinfo.value.__notes__[0],
     )
+
+
+def test_a_marker_returned_by_a_function_names_the_fix():
+    @factory(dict)
+    def ticket():
+        f.code = lambda: sequence(lambda n: n)
+
+    with pytest.raises(
+        FactoryError,
+        match=r": assign it as the attribute's whole value instead, f\.code = sequence\(\.\.\.\)\.\n",
+    ):
+        build(ticket)
 
 
 def test_a_callables_parameters_are_read_once_across_builds(monkeypatch):

@@ -276,5 +276,7 @@ INSIDE = {
 @pytest.mark.parametrize("wrap", INSIDE.values(), ids=INSIDE)
 def test_a_marker_inside_a_container_is_an_error(wrap):
     _declare(wrap(_counter()))
-    with pytest.raises(FactoryError, match="was never evaluated"):
+    with pytest.raises(
+        FactoryError, match="is inside a container, which never evaluates it"
+    ):
         build("thing")

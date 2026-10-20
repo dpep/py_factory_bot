@@ -157,18 +157,21 @@ def test_a_marker_inside_a_container_is_an_error():
     def post():
         f.authors = [association("author")]
 
-    rule = (
-        r" was never evaluated: a sequence\(\), association\(\) or transient\(\)"
-        r" works only as an attribute's whole value"
-    )
-    with pytest.raises(
-        FactoryError,
-        match=rf"^Factory 'post': <association 'author'>{rule}",
-    ) as excinfo:
+    with pytest.raises(FactoryError) as excinfo:
         build("post")
+    assert str(excinfo.value) == (
+        "Factory 'post': <association 'author'> is inside a container, which never evaluates it:"
+        " build the container in a function, where association() builds right away:"
+        " lambda: [association('author')]."
+    )
     assert excinfo.value.__notes__ == [
         "while building factory 'post', attribute 'authors'"
     ]
 
-    with pytest.raises(FactoryError, match=rf"^Factory 'author': <transient 1>{rule}"):
+    message = (
+        "Factory 'author': <transient 1> is inside a container, which never evaluates it:"
+        " declare it as an attribute of its own, transient() if the model shouldn't get it,"
+        " and take that attribute as a parameter."
+    )
+    with pytest.raises(FactoryError, match=f"^{re.escape(message)}\n"):
         build("author", name={"first": transient(1)})

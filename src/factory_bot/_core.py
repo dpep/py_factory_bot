@@ -303,12 +303,6 @@ class _Marker:
     """A declaration evaluated at build time, rather than a value used as given."""
 
 
-_MARKER_RULE = (
-    "a sequence(), association() or transient() works only as an attribute's whole value,"
-    " never returned from a function or inside a container."
-)
-
-
 class _Sequence(_Marker):
     def __init__(self, fn):
         self.fn = fn
@@ -377,7 +371,7 @@ class _Evaluator:
         try:
             value = self.evaluate(name, self.plan.definitions[name])
             if marker := _marker_in(value):
-                raise FactoryError(f"{marker!r} was never evaluated: {_MARKER_RULE}")
+                raise FactoryError(_never_evaluated(name, marker, value))
             self.values[name] = value
         except Exception as e:
             self.note(
@@ -722,6 +716,26 @@ def _marker_in(value, seen=None):
         else value
     )
     return next((m for item in items if (m := _marker_in(item, seen))), None)
+
+
+def _never_evaluated(name, marker, value):
+    if marker is value:
+        kind = type(marker).__name__.lstrip("_").lower()
+        return (
+            f"{marker!r} was returned by a function, which never evaluates it:"
+            f" assign it as the attribute's whole value instead, f.{name} = {kind}(...)."
+        )
+    if isinstance(marker, _Association):
+        fix = (
+            "build the container in a function, where association() builds right away:"
+            f" lambda: [association({marker.name!r})]"
+        )
+    else:
+        fix = (
+            "declare it as an attribute of its own, transient() if the model shouldn't get it,"
+            " and take that attribute as a parameter"
+        )
+    return f"{marker!r} is inside a container, which never evaluates it: {fix}."
 
 
 def _is_lazy(value):
