@@ -46,7 +46,7 @@ When several places set the same attribute, the most specific wins: overrides pa
 
 - **Calling:** functions (defs, lambdas, methods, builtins like `datetime.now`, `functools.partial`) are called on every build, with each parameter that has no default filled from the attribute of the same name. Every other object is stored, classes, `Mock()` and callable instances included.
 - **Copying:** lists, dicts, sets and tuples written in a body, their subclasses included, plus deques and bytearrays, are copied per build, nested ones too. Anything you pass at build time is used exactly as given, and never called.
-- **Markers:** a `sequence()`, `association()` or `transient()` works only as an attribute's whole value, never returned from a function or inside a container. An override can be a marker too.
+- **Markers:** a `sequence()`, `association()` or `transient()`, in a body or as an override, works only as an attribute's whole value, never inside a container or returned from a function; an `association()` called during a build isn't a marker, it builds right away.
 
 ```python
 from enum import Enum
@@ -147,7 +147,7 @@ Callbacks run parent first, then the child, then each trait in the order listed.
 
 ## Child factories
 
-A child inherits its parent's model, attributes, traits, sequences and callbacks, and changes what it needs. Declare it with `parent=`, or nest a bare `@factory` in the parent's body as shorthand:
+A child inherits its parent's model, attributes, traits, sequences and callbacks, and changes what it needs; it shares the sequences' counters, so building either one advances them. Declare it with `parent=`, after the parent:
 
 ```python
 @factory(dict)
@@ -164,12 +164,12 @@ def moderator():
 assert build(moderator) == {"name": "Ann", "role": "moderator"}
 ```
 
-`@factory(OtherModel, parent=member)` switches model too. A `parent=` child is a module-level handle you can import and type-check; a nested one is reached by its name.
+`@factory(OtherModel, parent=member)` switches model too.
 
 
 ## Associations
 
-`association(factory, *traits, **overrides)` makes another factory's object with the parent's strategy: `create` creates it first, so it's saved before the row that points at it, and `build` and `attributes_for` build it.
+`association(factory, *traits, **overrides)` makes another factory's object with the parent's strategy: `create` creates it first, so it's saved before the row that points at it, `build` builds it, and `attributes_for` leaves it out.
 
 ```python
 from dataclasses import dataclass
@@ -228,7 +228,7 @@ assert w.task.account is w.account
 assert len(w.items) == 2
 ```
 
-`association()` called during a build, from a lambda or a callback, simply builds or creates with the parent's strategy. That's how an association takes overrides from other attributes (`task` above), and how the parent gets a list of them (`items`).
+`association()` called during a build, from a lambda or a callback, simply builds or creates with the parent's strategy. That's how an association takes overrides from other attributes (`task` above), and how the parent gets a list of them (`items`). Its overrides are used as given, exactly as `build()`'s are, so write `name=fake.first_name()` there, or declare the attribute in the other factory's body.
 
 To replace one at build time:
 
@@ -386,7 +386,7 @@ def typed_member():
 m: Member = build(typed_member)
 ```
 
-- Use a name where no handle is in reach: a nested child, or a factory defined later in the file.
+- Use a name where no handle is in reach: a factory defined later in the file.
 - A pytest fixture named `user` shadows an imported `user` factory. Import the module and write `build(factories.user)`.
 - mypy `--strict` wants a return type on bodies: `def user() -> None:`.
 - pyright strict reports a lambda's injected parameters as untyped. Where that matters, use an annotated `def`, injected the same way.
@@ -568,38 +568,14 @@ def test_factories_create(session):  # or @pytest.mark.django_db
 
 ## Error messages
 
-Every `FactoryError` names the factory it happened in, and most say how to fix it. An exception from your model or your functions keeps its type and gains notes naming the factory, the attribute and its line. These need more context than the message has room for:
-
-- `Factory 'book': 'byline' depends on 'author', which isn't made because author_id= was given. Pass author= as well.`
-
-  `author_id=` skips the `author` association, so nothing that needs the author object can run. Pass both, or neither.
-
-- `Factory 'user' is already defined (<full path>/tests/factories.py:4). To redefine it, e.g. in a REPL or after a reload, call clear_factories() first.`
-
-  If the path is the very line being defined, the module was imported twice, under two names (`factories` and `tests.factories`). Fix the import, not the factory.
-
-- `Factory 'person': circular dependency: name -> name`
-
-  A lambda takes its own attribute as a parameter: `f.name = lambda name: name.title()`. To adjust a value after it's worked out, use a callback.
-
-- `Factory 'account': can't create a dict: it has no save(). Give it a save() method, or call persist_with() with a function or a SQLAlchemy session.`
-
-  In a test that should have a database, the fixture that calls `persist_with` didn't run.
-
-- `'team__name': deep overrides aren't supported. Override the association instead: team=association("team", name=...)` (a note on the model's `TypeError`)
-
-  There's no `__` syntax. Pass a whole association with its own overrides.
-
-- `Factory 'ticket': <sequence (factories.py:59)> was never evaluated: a sequence(), association() or transient() works only as an attribute's whole value, never returned from a function or inside a container.`
-
-  Assign the marker itself, `f.code = sequence(...)`. For a list of associations, call `association()` in a lambda: `lambda: [association(user)]`.
+Every `FactoryError` names the factory it happened in, and most say how to fix it. An exception from your model or your functions keeps its type and gains notes naming the factory, the attribute and its line.
 
 
 ## API at a glance
 
 | | |
 |---|---|
-| `@factory(Model)`, `@factory(parent=f)`, `@factory(Model, parent=f)` | Register a factory named after the function, returning a `Factory`. Nested bare `@factory` is a child of the enclosing factory. |
+| `@factory(Model)`, `@factory(parent=f)`, `@factory(Model, parent=f)` | Register a factory named after the function, returning a `Factory`. |
 | `@trait` | A named set of attributes inside a factory. |
 | `f.name = value` | Declare an attribute: see [the value rule](#the-value-rule). |
 | `sequence(fn)` | `fn(n, **dependencies)` for n = 1, 2, 3... |
