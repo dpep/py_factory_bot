@@ -355,8 +355,8 @@ Define factories at module level, not in tests or fixtures, since names are glob
 
 The pytest plugin:
 
-- **Reseeds `fake`** for every test and every fixture, at any scope, from the run's seed and its id. Each gets the same fake data alone, in the suite, in any order or under pytest-xdist. With pytest-randomly, each run picks a new seed, and `--randomly-seed=N` replays it.
-- **Leaves sequences counting** across tests, unless you ask. Restarting them makes two tests both create `user1`, which collides when rows survive between tests. If every test rolls back, turn it on:
+- **Reseeds `fake`** for every test and every fixture, at any scope, from the run's seed and its id (which depends on pytest's rootdir: with no `pyproject.toml` or `pytest.ini`, it moves with the directory you run from). Each gets the same fake data alone, in the suite, in any order or under pytest-xdist. With pytest-randomly, each run picks a new seed, and `--randomly-seed=N` replays it.
+- **Leaves sequences counting** across tests, unless you ask. Restarting them makes two tests both create `user1`, which collides when rows survive between tests. If every test rolls back, and no module or session fixture creates rows, turn it on:
 
   ```toml
   [tool.pytest.ini_options]
@@ -530,7 +530,7 @@ def session(engine):
     with engine.connect() as connection:
         transaction = connection.begin()
         session = Session(bind=connection, join_transaction_mode="create_savepoint")
-        persist_with(session)  # undone when the fixture ends
+        persist_with(session)  # undone when the fixture ends (by the pytest plugin)
         yield session
         session.close()
         transaction.rollback()

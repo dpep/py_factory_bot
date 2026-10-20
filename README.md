@@ -104,7 +104,7 @@ def session():
     engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)
     with Session(engine) as session:
-        persist_with(session)  # undone when the fixture ends
+        persist_with(session)  # undone when the fixture ends (by the pytest plugin)
         yield session
 ```
 
