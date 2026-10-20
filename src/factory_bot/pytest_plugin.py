@@ -32,7 +32,8 @@ def pytest_runtest_setup(item):
         reset_sequences()
 
 
-@pytest.hookimpl(wrapper=True)
+# hookwrapper, not wrapper: pluggy < 1.2 rejects wrapper= at import, breaking every run.
+@pytest.hookimpl(hookwrapper=True)
 def pytest_fixture_setup(fixturedef, request):
     # request.node is the fixture's scope node (test, module, session), not its definition:
     # seeding from the definition would give a function fixture the same data in every test.
@@ -49,27 +50,23 @@ def pytest_fixture_setup(fixturedef, request):
         key += f"[{getattr(request, 'param_index', 0)}]"
     fake.seed_instance(key)
     _core._enter_owner(owner)
-    try:
-        result = yield
-    finally:
-        _core._leave_owner(owner)
-        # Resume the stream the setup interrupted, so the requesting test's data stays its
-        # own; unless the fixture called seed(), which is the stream it chose.
-        if _fake._generation == generation:
-            fake.random.setstate(state)
-    # Runs before the fixture's teardown, so a persist_with there is the fixture's too.
-    request.addfinalizer(lambda: _core._enter_owner(owner))
-    return result
+    outcome = yield
+    _core._leave_owner(owner)
+    # Resume the stream the setup interrupted, so the requesting test's data stays its
+    # own; unless the fixture called seed(), which is the stream it chose.
+    if _fake._generation == generation:
+        fake.random.setstate(state)
+    if outcome.excinfo is None:
+        # Runs before the fixture's teardown, so a persist_with there is the fixture's too.
+        request.addfinalizer(lambda: _core._enter_owner(owner))
 
 
-@pytest.hookimpl(wrapper=True)
+@pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_call(item):
     owner = object()
     _core._enter_owner(owner)
-    try:
-        return (yield)
-    finally:
-        _core._end_owner(owner)
+    yield
+    _core._end_owner(owner)
 
 
 def _seed(config):
