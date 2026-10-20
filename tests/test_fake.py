@@ -5,9 +5,15 @@ import re
 import pytest
 from faker import Faker
 from faker.providers import BaseProvider
+from faker.proxy import UniqueProxy
 
 from factory_bot import FactoryError, after_build, build, f, factory, fake, seed, trait
 from factory_bot._fake import _Fake
+
+needs_exclude_types = pytest.mark.skipif(
+    not hasattr(UniqueProxy, "exclude_types"),
+    reason="fake.unique.exclude_types is new in Faker 40.1",
+)
 
 
 def test_fake_is_a_shared_faker_whose_methods_are_lazy_values():
@@ -93,6 +99,7 @@ def test_unique_and_optional_calls_in_a_trait_name_the_call_written(proxy):
                 f.code = getattr(fake, proxy).random_int(min=1, max=9)
 
 
+@needs_exclude_types
 def test_a_call_through_unique_exclude_types_names_the_call_written():
     with pytest.raises(
         FactoryError,
@@ -189,6 +196,7 @@ def test_a_multi_locale_fake_still_proxies_and_guards():
             f.name = multi.first_name()
 
 
+@needs_exclude_types
 def test_generator_helpers_and_unique_settings_are_not_provider_calls():
     class Shop(BaseProvider):
         def sku(self):

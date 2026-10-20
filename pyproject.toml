@@ -11,7 +11,7 @@ license = "MIT"
 license-files = ["LICENSE.txt"]
 authors = [{ name = "Daniel Pepper" }]
 requires-python = ">= 3.11"
-dependencies = ["faker"]
+dependencies = ["faker >= 23.2"]
 keywords = ["testing", "factories", "fixtures", "factory_bot"]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",

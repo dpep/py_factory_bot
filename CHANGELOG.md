@@ -10,6 +10,7 @@
 - Replace `build(...)` or `attributes_for(...)` called directly in a body with `association(...)`, or wrap it in a lambda. Applies if a body calls one: it ran once, at import, so every build shared one object. It's now an error, and so is `create(...)`.
 - Rename or remove one of the two. Applies if a factory defines two traits with the same name: the second used to replace the first silently, and is now an error.
 - Remove a `seed()` call made once for the whole run, or disable the plugin with `-p no:factory_bot`. Applies if you seed `fake` in a conftest: the new pytest plugin reseeds before every test.
+- Upgrade Faker to 23.2 or later. Applies if your project pins an older one: factory_bot now requires it, since before 23.2 `fake["en_US"]` hands back Faker's generator, which the body-call check can't see.
 - Install Django or SQLAlchemy yourself. Applies if you installed `factory_bot[django]` or `factory_bot[sqlalchemy]`: the extras are gone, since factory_bot never imports either.
 
 ### Added
