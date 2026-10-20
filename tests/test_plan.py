@@ -57,18 +57,18 @@ def factories():
             def shout(user):
                 pass
 
-        @factory
-        def guest():
-            f.name = "Guest"
-            f.code = "g"
+    @factory(parent=user)
+    def guest():
+        f.name = "Guest"
+        f.code = "g"
 
-            @trait
-            def admin():
-                f.role = "guest admin"
+        @trait
+        def admin():
+            f.role = "guest admin"
 
-        @factory(Robot)
-        def robot():
-            pass
+    @factory(Robot, parent=user)
+    def robot():
+        pass
 
     @factory(dict)
     def plain():

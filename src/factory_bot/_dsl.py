@@ -51,14 +51,12 @@ def factory(model: Any = None, /, *, parent: Any = None) -> Any:
 def _define(body, model, parent):
     _check_body(body, "factory")
     name = body.__name__
-    if _stack.get():
-        if parent is not None:
-            raise FactoryError(
-                f"@factory(parent=...) def {name} is inside factory {_defining_factory()!r},"
-                " which is already its parent: drop parent="
-            )
-        parent = _current(f"@factory def {name}")
-    elif parent is not None:
+    if outer := _defining_factory():
+        raise FactoryError(
+            f"@factory def {name} is inside factory {outer!r}; define a child"
+            f" after its parent, at the top level: @factory(parent={outer}) def {name}"
+        )
+    if parent is not None:
         parent_name = _name_of(parent)
         try:
             parent = _lookup(parent_name)

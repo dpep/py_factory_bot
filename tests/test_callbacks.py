@@ -66,11 +66,11 @@ def test_callbacks_run_in_definition_order_parent_first_then_traits():
             def from_trait(obj):
                 calls.append("admin trait")
 
-        @factory
-        def guest():
-            @after_build
-            def from_child(obj):
-                calls.append("guest")
+    @factory(parent=user)
+    def guest():
+        @after_build
+        def from_child(obj):
+            calls.append("guest")
 
     build("guest", "admin")
     assert calls == ["user 1", "user 2", "guest", "admin trait"]

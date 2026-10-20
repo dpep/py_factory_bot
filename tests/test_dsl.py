@@ -67,11 +67,11 @@ def test_a_child_may_redefine_its_parents_trait():
         def admin():
             f.admin = True
 
-        @factory
-        def guest():
-            @trait
-            def admin():
-                f.admin = False
+    @factory(parent=user)
+    def guest():
+        @trait
+        def admin():
+            f.admin = False
 
     assert build("guest", "admin") == {"admin": False}
 
@@ -152,15 +152,6 @@ def test_an_old_style_body_shows_the_new_form():
 
 
 def test_an_old_style_bare_factory_shows_the_new_form():
-    message = r"^Factory 'user': def guest\(f\) takes no parameters: drop the parameter and import f"
-    with pytest.raises(FactoryError, match=message):
-
-        @factory(dict)
-        def user():
-            @factory
-            def guest(f):
-                pass
-
     with pytest.raises(FactoryError, match=r"^def admin\(f\) takes no parameters"):
 
         @factory

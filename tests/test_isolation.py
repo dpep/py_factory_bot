@@ -31,9 +31,11 @@ def from_trait():
 def from_child():
     @factory(dict)
     def user():
-        @factory
-        def guest():
-            f.settings = settings()
+        pass
+
+    @factory(parent=user)
+    def guest():
+        f.settings = settings()
 
     return build("guest")["settings"], build("guest")["settings"]
 

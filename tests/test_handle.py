@@ -46,20 +46,16 @@ def test_the_decorator_returns_a_handle_that_goes_wherever_a_name_goes():
 
 
 def test_a_child_returns_a_handle_too():
-    seen = {}
-
     @factory(User)
     def user():
         f.name = "Ann"
 
-        @factory
-        def guest():
-            f.name = "Guest"
+    @factory(parent=user)
+    def guest():
+        f.name = "Guest"
 
-        seen["guest"] = guest
-
-    assert seen["guest"].name == "guest"
-    assert build(seen["guest"]) == User("Guest")
+    assert guest.name == "guest"
+    assert build(guest) == User("Guest")
 
 
 def test_a_handle_is_only_a_name():

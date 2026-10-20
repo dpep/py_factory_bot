@@ -155,10 +155,6 @@ def member():
     f.name = "Ann"
     f.role = "member"
 
-    @factory
-    def guest():
-        f.role = "guest"
-
 
 @factory(parent=member)
 def moderator():
@@ -166,7 +162,6 @@ def moderator():
 
 
 assert build(moderator) == {"name": "Ann", "role": "moderator"}
-assert build("guest") == {"name": "Ann", "role": "guest"}
 ```
 
 `@factory(OtherModel, parent=member)` switches model too. A `parent=` child is a module-level handle you can import and type-check; a nested one is reached by its name.

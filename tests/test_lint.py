@@ -41,9 +41,9 @@ def test_lint_reports_every_failing_build_as_a_call_to_reproduce():
         def broken():
             f.nmae = "x"
 
-        @factory
-        def guest():
-            f.email = lambda frist: frist
+    @factory(parent=user)
+    def guest():
+        f.email = lambda frist: frist
 
     @factory(dict)
     def post():

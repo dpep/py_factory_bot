@@ -56,13 +56,6 @@ def test_the_public_api_has_honest_types():
 
         assert_type(signed, Callable[[], None])
 
-        @factory
-        def paperback() -> None:
-            f.title = "Paperback"
-
-        # The decorator never sees the parent, so a child can't know its model.
-        assert_type(paperback, Factory[Any])
-
     assert_type(book, Factory[Book])
 
     # A top-level child names its parent, so it is typed by the parent's model.
