@@ -23,9 +23,6 @@ T = TypeVar("T")
 Fn = TypeVar("Fn", bound=Callable[..., Any])
 
 
-# A zero-argument function is a body, never a model: a model takes keyword arguments.
-@overload
-def factory(body: Callable[[], None], /) -> Factory[Any]: ...  # pyright: ignore[reportOverlappingOverload]
 @overload
 def factory(*, parent: Factory[T]) -> Callable[[Callable[[], object]], Factory[T]]: ...
 @overload
@@ -39,10 +36,7 @@ def factory(
     model: Callable[..., T], /, *, parent: str | Factory[Any] | None = None
 ) -> Callable[[Callable[[], object]], Factory[T]]: ...
 def factory(model: Any = None, /, *, parent: Any = None) -> Any:
-    """@factory(User) registers a factory; @factory(parent=user) a child of user.
-
-    Nested in a factory's body, a factory's parent is that factory: bare @factory is the child.
-    """
+    """@factory(User) registers a factory; @factory(parent=user) a child of user."""
     if _is_body(model):
         return _define(model, None, None)
     return lambda body: _define(body, model, parent)
@@ -75,12 +69,8 @@ def _define(body, model, parent):
     if model is not None and not callable(model):
         raise FactoryError(f"model {model!r} is not callable", factory=name)
     definition = _Definition(name, model, body, parent=parent)
-    # A body that raises registers nothing, children included.
-    _run_body(definition, body)
-    if stack := _stack.get():
-        stack[-1].children.append(definition)
-    else:
-        _register(definition)
+    _run_body(definition, body)  # a body that raises registers nothing
+    _register(definition)
     return Factory(name)
 
 

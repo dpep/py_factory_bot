@@ -154,13 +154,12 @@ def _misuse_is_a_type_error(book: Factory[Book], untyped: Any) -> None:
     lint(strategy="attributes_for")  # pyright: ignore[reportArgumentType]
     persist_with("users")  # pyright: ignore[reportCallIssue, reportArgumentType]
 
-    # A model typed Any matches every overload, so pyright keeps the undecorated function:
-    # use the factory's name, or cast.
+    # Not a misuse: a model typed Any still gives a factory, not the undecorated function.
     @factory(untyped)
     def thing() -> None:
         pass
 
-    build(thing)  # pyright: ignore[reportCallIssue, reportArgumentType]
+    build(thing)
 
 
 # Decorators hand back what they were given, so a body or hook keeps its type.

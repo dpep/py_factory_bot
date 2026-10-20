@@ -195,11 +195,8 @@ class _Definition:
         self.parent = parent
         self.attributes = {}
         self.traits: dict[str, _Definition] = {}
-        self.children: list[_Definition] = []
         self.callbacks = {"after_build": [], "after_create": []}
 
-    # Walked at build time, not definition time: a child is defined while its
-    # parent's body is still running, so later parent attributes must still reach it.
     def lineage(self):
         return [*(self.parent.lineage() if self.parent else []), self]
 
@@ -261,9 +258,6 @@ class _Definition:
             },
         )
 
-    def tree(self):
-        return [self, *(d for child in self.children for d in child.tree())]
-
 
 @dataclass
 class _Plan:
@@ -286,25 +280,20 @@ class _Plan:
 
 
 def _register(definition):
-    """Register a top-level factory and its children, all or none."""
-    seen = {}
-    for d in definition.tree():
-        existing = _registry.get(d.name) or seen.get(d.name)
-        if existing:
-            first, again = existing.body, d.body
-            same_line = _where(first, full=True) == _where(again, full=True)
-            if same_line and first.__module__ != again.__module__:
-                fix = (
-                    f": the same file was imported twice, as {first.__module__!r}"
-                    f" and as {again.__module__!r}. Import it under one name."
-                )
-            else:
-                fix = ". To redefine it, e.g. in a REPL or after a reload, call clear_factories() first."
-            raise FactoryError(
-                f"Factory {d.name!r} is already defined{_where(first, full=True)}{fix}"
+    if existing := _registry.get(definition.name):
+        first, again = existing.body, definition.body
+        same_line = _where(first, full=True) == _where(again, full=True)
+        if same_line and first.__module__ != again.__module__:
+            fix = (
+                f": the same file was imported twice, as {first.__module__!r}"
+                f" and as {again.__module__!r}. Import it under one name."
             )
-        seen[d.name] = d
-    _registry.update(seen)
+        else:
+            fix = ". To redefine it, e.g. in a REPL or after a reload, call clear_factories() first."
+        raise FactoryError(
+            f"Factory {definition.name!r} is already defined{_where(first, full=True)}{fix}"
+        )
+    _registry[definition.name] = definition
 
 
 class _Marker:
