@@ -1,3 +1,4 @@
+import contextlib
 import functools
 
 from faker import Faker
@@ -86,7 +87,7 @@ def _guard(name, method):
 fake: Faker = _Fake()
 
 
-_generation = 0  # counts seed() calls, so the pytest plugin can tell a fixture seeded
+_generation = 0  # counts seed() calls, so scoped() can tell its scope seeded
 
 
 def seed(value: float | str | bytes | None) -> None:
@@ -95,3 +96,16 @@ def seed(value: float | str | bytes | None) -> None:
     _generation += 1
     fake.seed_instance(value)
     fake.unique.clear()  # its seen-values would otherwise make output depend on history
+
+
+@contextlib.contextmanager
+def scoped(key: str):
+    """Draw from a stream seeded by key, then resume the stream it interrupted: unless the
+    scope called seed(), which is the stream it chose."""
+    state, generation = fake.random.getstate(), _generation
+    fake.seed_instance(key)
+    try:
+        yield
+    finally:
+        if _generation == generation:
+            fake.random.setstate(state)

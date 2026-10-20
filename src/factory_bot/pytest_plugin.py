@@ -4,7 +4,7 @@ it; optionally reset sequences. Disable with -p no:factory_bot."""
 
 import pytest
 
-from factory_bot import _core, _fake, fake, reset_sequences, seed
+from factory_bot import _core, _fake, reset_sequences, seed
 
 DEFAULT_SEED = 0
 
@@ -41,19 +41,14 @@ def pytest_fixture_setup(fixturedef, request):
     owner = object()
     # Registered before setup, so it runs after the fixture's own teardown (finalizers are LIFO).
     request.addfinalizer(lambda: _core._end_owner(owner))
-    state, generation = fake.random.getstate(), _fake._generation
     # baseid tells apart a fixture from the same-named one it overrides.
     key = f"{_seed(request.config)}:{request.node.nodeid}::{fixturedef.baseid}::{fixturedef.argname}"
     if hasattr(request, "param"):
         key += f"[{_param_id(request)}]"
-    fake.seed_instance(key)
-    _core._enter_owner(owner)
-    outcome = yield
-    _core._leave_owner(owner)
-    # Resume the stream the setup interrupted, so the requesting test's data stays its
-    # own; unless the fixture called seed(), which is the stream it chose.
-    if _fake._generation == generation:
-        fake.random.setstate(state)
+    with _fake.scoped(key):
+        _core._enter_owner(owner)
+        outcome = yield
+        _core._leave_owner(owner)
     if outcome.excinfo is None:
         # Runs before the fixture's teardown, so a persist_with there is the fixture's too.
         request.addfinalizer(lambda: _core._enter_owner(owner))
