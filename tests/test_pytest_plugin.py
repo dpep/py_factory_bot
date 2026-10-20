@@ -185,7 +185,7 @@ PARAMS = """
 import pytest
 from factory_bot import fake
 
-@pytest.fixture(scope="module", params=["a", "b"])
+@pytest.fixture(scope="module", params=__PARAMS__, ids=["a", "b"])
 def shared(request):
     return fake.name()
 
@@ -194,15 +194,66 @@ def test_p(shared, request):
 """
 
 
-def test_each_param_of_a_module_fixture_gets_its_own_data(pytester):
-    # Seeded from pytest's param index (SubRequest.param_index, undocumented): if pytest
-    # drops it, every param gets the same data again and this fails.
-    pytester.makepyfile(test_params=PARAMS)
+# An object's repr may hold an address, so it is seeded by the param's index instead.
+@pytest.mark.parametrize("params", ['["a", "b"]', "[object(), object()]"])
+def test_each_param_of_a_module_fixture_gets_its_own_data(pytester, params):
+    pytester.makepyfile(test_params=PARAMS.replace("__PARAMS__", params))
     data = names(run(pytester))
     assert data.keys() == {"test_p_a", "test_p_b"}
     assert data["test_p_a"] != data["test_p_b"]
     alone = names(run(pytester, "test_params.py::test_p[b]"))
     assert alone["test_p_b"] == data["test_p_b"]
+
+
+OVERRIDE = """
+import pytest
+from factory_bot import fake
+
+@pytest.fixture
+def user(user):
+    return f"{user}|{fake.name()}"
+
+def test_override(user):
+    print(f"test_override={user}")
+"""
+
+
+def test_a_fixture_overriding_one_of_its_name_gets_its_own_data(pytester):
+    pytester.makeconftest(
+        "import pytest\nfrom factory_bot import fake\n\n"
+        "@pytest.fixture\ndef user():\n    return fake.name()\n"
+    )
+    pytester.makepyfile(test_override=OVERRIDE)
+    inner, outer = names(run(pytester))["test_override"].split("|")
+    assert inner != outer
+
+
+INDIRECT = """
+import pytest
+from factory_bot import fake
+
+@pytest.fixture(scope="module")
+def account(request):
+    return fake.name()
+
+@pytest.mark.parametrize("account", ["free"], indirect=True)
+def test_free(account):
+    print(f"test_free={account}")
+
+@pytest.mark.parametrize("account", ["pro"], indirect=True)
+def test_pro(account):
+    print(f"test_pro={account}")
+"""
+
+
+def test_each_indirect_param_of_a_module_fixture_gets_its_own_data(pytester):
+    pytester.makepyfile(test_indirect=INDIRECT)
+    data = names(run(pytester))
+    assert data["test_free"] != data["test_pro"]
+    assert (
+        names(run(pytester, "test_indirect.py::test_pro"))["test_pro"]
+        == data["test_pro"]
+    )
 
 
 # A fixture's seed() is the fixture's own change: the plugin's restore must not undo it.

@@ -42,12 +42,10 @@ def pytest_fixture_setup(fixturedef, request):
     # Registered before setup, so it runs after the fixture's own teardown (finalizers are LIFO).
     request.addfinalizer(lambda: _core._end_owner(owner))
     state, generation = fake.random.getstate(), _fake._generation
-    key = f"{_seed(request.config)}:{request.node.nodeid}::{fixturedef.argname}"
+    # baseid tells apart a fixture from the same-named one it overrides.
+    key = f"{_seed(request.config)}:{request.node.nodeid}::{fixturedef.baseid}::{fixturedef.argname}"
     if hasattr(request, "param"):
-        # A module fixture's node is the same for every param. param_index is undocumented
-        # (request.param's repr can hold an address); a test pins it, and losing it here
-        # only costs distinct data per param.
-        key += f"[{getattr(request, 'param_index', 0)}]"
+        key += f"[{_param_id(request)}]"
     fake.seed_instance(key)
     _core._enter_owner(owner)
     outcome = yield
@@ -67,6 +65,15 @@ def pytest_runtest_call(item):
     _core._enter_owner(owner)
     yield
     _core._end_owner(owner)
+
+
+def _param_id(request):
+    # A higher-scope fixture's node is the same for every param, and an indirect param's
+    # index is 0 in each test, so name it by value, as pytest's ids do; a repr may hold an
+    # address, though, so other objects fall back to the (undocumented) index.
+    if isinstance(request.param, (str, int, float, type(None))):
+        return repr(request.param)
+    return getattr(request, "param_index", 0)
 
 
 def _seed(config):
