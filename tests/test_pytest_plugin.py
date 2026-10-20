@@ -236,7 +236,8 @@ def test_seed_in_a_fixture_pins_the_data_after_it(pytester, autouse):
     assert data["test_seeded"] == data["test_expected"]
 
 
-# persist_with: each call belongs to the test or fixture running it, and lasts until that ends.
+# persist_with: one case per lifecycle, for the plugin's finalizer choreography; the rule
+# itself is test_persist_owners' table.
 
 HELPERS = """
 from factory_bot import create, factory
@@ -282,14 +283,6 @@ def in_module():
 @pytest.fixture(scope="session")
 def in_session():
     persist_with(hook("in_session"))
-
-@pytest.fixture(scope="module")
-def module_resource():
-    return "resource"
-
-@pytest.fixture(scope="session")
-def session_resource():
-    return "resource"
 """
 
 PREAMBLE = """
@@ -370,26 +363,6 @@ def test_c():
     run_owners(owners, 3, test_1=test_1, test_2=test_2)
 
 
-@pytest.mark.parametrize("resource", ["module_resource", "session_resource"])
-@pytest.mark.parametrize("autouse", [False, True])
-def test_a_fixture_created_lazily_does_not_keep_the_hook_it_found(
-    owners, resource, autouse
-):
-    test_1 = f"""
-@pytest.fixture(autouse={autouse})
-def autouse_hook():
-    persist_with(hook("in_autouse"))
-
-def test_a(request):
-    persist_with(hook("in_test"))
-    request.getfixturevalue("{resource}")
-
-def test_b({resource}):
-    assert saved_by() == "{"in_autouse" if autouse else "at_import"}"
-"""
-    run_owners(owners, 3, test_1=test_1, test_2=AT_IMPORT)
-
-
 def test_the_most_recent_hook_wins_and_each_lasts_as_long_as_its_owner(owners):
     # in_module's teardown asserts it still sees its own hook.
     test_1 = """
@@ -407,18 +380,6 @@ def test_c():
     assert saved_by() == "in_module"
 """
     run_owners(owners, 4, test_1=test_1, test_2=AT_IMPORT)
-
-
-def test_persist_with_none_saves_with_save_until_its_owner_ends(owners):
-    test_1 = """
-def test_a(in_session):
-    persist_with(None)
-    assert saved_by() == "save"
-
-def test_b(in_session):
-    assert saved_by() == "in_session"
-"""
-    run_owners(owners, 2, test_1=test_1)
 
 
 def test_a_hook_set_in_a_fixtures_teardown_ends_with_it(owners):
@@ -465,25 +426,6 @@ def test_b():
     assert saved_by() == "in_test"
 """
     run_owners(owners, 2, "-p", "no:factory_bot", test_1=test_1)
-
-
-def test_outside_pytest_persist_with_is_global(owners):
-    owners.makepyfile(
-        script="""
-from factory_bot import persist_with
-from helpers import hook, saved_by
-
-persist_with(hook("first"))
-persist_with(hook("second"))
-assert saved_by() == "second"
-persist_with(None)
-assert saved_by() == "save"
-print("ok")
-"""
-    )
-    result = owners.runpython(owners.path / "script.py")
-    assert result.ret == 0
-    assert result.outlines == ["ok"]
 
 
 def test_hooks_hold_under_xdist_and_randomly(owners):
