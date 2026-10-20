@@ -280,6 +280,27 @@ def test_a_session_fixtures_unique_values_leave_the_tests_alone(pytester):
     assert alone["test_b"] == together["test_b"] == "[1, 2, 3]"
 
 
+def test_fake_values_made_at_collection_are_seeded_too(pytester):
+    # Or xdist workers collect different tests, and ids change from run to run.
+    pytester.makepyfile(
+        test_collected="""
+import pytest
+from factory_bot import fake
+
+@pytest.mark.parametrize("name", [fake.name() for _ in range(2)])
+def test_name(name):
+    pass
+"""
+    )
+
+    def collected():
+        return pytester.runpytest("-p", "no:randomly", "--collect-only", "-q").outlines[
+            :2
+        ]
+
+    assert collected() == collected()
+
+
 # A fixture's seed() is the fixture's own change: the plugin's restore must not undo it.
 
 SEEDED = """

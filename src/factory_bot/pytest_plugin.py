@@ -18,6 +18,13 @@ def pytest_addoption(parser):
     )
 
 
+# trylast: after pytest-randomly's pytest_configure has resolved --randomly-seed.
+@pytest.hookimpl(trylast=True)
+def pytest_configure(config):
+    # Fake values made while collecting, e.g. in parametrize, are part of test ids.
+    seed(f"{_seed(config)}:collection")
+
+
 def pytest_report_header(config):
     source = " (--randomly-seed)" if _randomly_seed(config) is not None else ""
     reset = "on" if config.getini("factory_bot_reset_sequences") else "off"
