@@ -99,13 +99,19 @@ def seed(value: float | str | bytes | None) -> None:
 
 
 @contextlib.contextmanager
-def scoped(key: str):
+def scoped(key: str, *, own_unique: bool = False):
     """Draw from a stream seeded by key, then resume the stream it interrupted: unless the
-    scope called seed(), which is the stream it chose."""
+    scope called seed(), which is the stream it chose. With own_unique, fake.unique's
+    values drawn inside are kept apart from those outside."""
     state, generation = fake.random.getstate(), _generation
+    seen = fake.unique._seen  # Faker's clear() rebinds it, so the outer set survives
+    if own_unique:
+        fake.unique.clear()
     fake.seed_instance(key)
     try:
         yield
     finally:
+        if own_unique:
+            fake.unique._seen = seen
         if _generation == generation:
             fake.random.setstate(state)

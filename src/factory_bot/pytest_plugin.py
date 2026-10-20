@@ -24,7 +24,7 @@ def pytest_report_header(config):
     return f"factory_bot: seed={_seed(config)}{source}, reset_sequences={reset}"
 
 
-# tryfirst: before fixtures run, so they share the test's fresh fake.unique.
+# tryfirst: before fixtures run, so its function fixtures share the test's fresh fake.unique.
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_setup(item):
     seed(f"{_seed(item.config)}:{item.nodeid}")
@@ -37,7 +37,6 @@ def pytest_runtest_setup(item):
 def pytest_fixture_setup(fixturedef, request):
     # request.node is the fixture's scope node (test, module, session), not its definition:
     # seeding from the definition would give a function fixture the same data in every test.
-    # fake.unique is left alone, so a test and its fixtures share one seen-set.
     owner = object()
     # Registered before setup, so it runs after the fixture's own teardown (finalizers are LIFO).
     request.addfinalizer(lambda: _core._end_owner(owner))
@@ -45,7 +44,9 @@ def pytest_fixture_setup(fixturedef, request):
     key = f"{_seed(request.config)}:{request.node.nodeid}::{fixturedef.baseid}::{fixturedef.argname}"
     if hasattr(request, "param"):
         key += f"[{_param_id(request)}]"
-    with _fake.scoped(key):
+    # A higher-scope fixture outlives the test that sets it up, so its fake.unique values
+    # must not count against that test's.
+    with _fake.scoped(key, own_unique=fixturedef.scope != "function"):
         _core._enter_owner(owner)
         outcome = yield
         _core._leave_owner(owner)

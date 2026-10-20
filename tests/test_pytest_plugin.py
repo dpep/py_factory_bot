@@ -256,6 +256,30 @@ def test_each_indirect_param_of_a_module_fixture_gets_its_own_data(pytester):
     )
 
 
+SHARED_UNIQUE = """
+import pytest
+from factory_bot import fake
+
+@pytest.fixture(scope="session")
+def code():
+    return fake.unique.random_int(1, 3)
+
+def test_a(code):
+    print("test_a=ok")
+
+def test_b(code):
+    print(f"test_b={sorted(fake.unique.random_int(1, 3) for _ in range(3))}")
+"""
+
+
+def test_a_session_fixtures_unique_values_leave_the_tests_alone(pytester):
+    # If the fixture's draw counted against test_b alone, its three draws couldn't all fit.
+    pytester.makepyfile(test_shared=SHARED_UNIQUE)
+    together = names(run(pytester))
+    alone = names(run(pytester, "test_shared.py::test_b"))
+    assert alone["test_b"] == together["test_b"] == "[1, 2, 3]"
+
+
 # A fixture's seed() is the fixture's own change: the plugin's restore must not undo it.
 
 SEEDED = """
