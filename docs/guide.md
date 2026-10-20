@@ -1,6 +1,6 @@
 # factory_bot guide
 
-The [README](https://github.com/dpep/py_factory_bot/blob/main/README.md) gets you to a first green test. This is the manual.
+The [README](https://github.com/dpep/py_factory_bot/blob/main/README.md) gets you to a first green test. This is the manual. Its samples build on each other, so imports and models from earlier ones aren't repeated.
 
 - [How a factory works](#how-a-factory-works)
 - [The value rule](#the-value-rule)
@@ -355,7 +355,7 @@ Define factories at module level, not in tests or fixtures, since names are glob
 
 The pytest plugin:
 
-- **Reseeds `fake`** for every test and every fixture, at any scope, from the run's seed and its id (which depends on pytest's rootdir: with no `pyproject.toml` or `pytest.ini`, it moves with the directory you run from). Each gets the same fake data alone, in the suite, in any order or under pytest-xdist. With pytest-randomly, each run picks a new seed, and `--randomly-seed=N` replays it.
+- **Reseeds `fake`** for every test and every fixture, at any scope, from the run's seed and its id (which depends on pytest's rootdir: with no `pyproject.toml` or `pytest.ini`, it moves with the directory you run from). Each gets the same fake data alone, in the suite, in any order or under pytest-xdist, except sequence numbers, which keep counting. With pytest-randomly, each run picks a new seed, and `--randomly-seed=N` replays it.
 - **Leaves sequences counting** across tests, unless you ask. Restarting them makes two tests both create `user1`, which collides when rows survive between tests. If every test rolls back, and no module or session fixture creates rows, turn it on:
 
   ```toml

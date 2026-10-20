@@ -2,7 +2,7 @@
 
 Generate realistic test data with ease.
 
-Describe your test data once, and every test can ask for it: `build(user)`, `create(user, "admin", first_name="Jane")`, `build_list(post, 3)`. Each test spells out only the fields it cares about, and the factory fills in the rest, with believable fake values from [Faker](https://faker.readthedocs.io) when you ask for them. It works with anything that takes keyword arguments: plain classes, dataclasses, dicts, Django and SQLAlchemy models. Under pytest, every test gets the same fake data whether it runs alone, in the suite, or in a different order.
+Describe your test data once, and every test can ask for it: `build(user)`, `create(user, "admin", first_name="Jane")`, `build_list(post, 3)`. Each test spells out only the fields it cares about, and the factory fills in the rest, with believable fake values from [Faker](https://faker.readthedocs.io) when you ask for them. It works with anything that takes keyword arguments: plain classes, dataclasses, dicts, Django and SQLAlchemy models. Under pytest, every test gets the same fake data whether it runs alone, in the suite, or in a different order. Sequence numbers are the exception: they keep counting across tests.
 
 Early development: the API is still settling.
 
@@ -96,7 +96,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from factory_bot import persist_with
-from myapp.models import Base
+from myapp.models import Base  # your declarative base
 
 
 @pytest.fixture
