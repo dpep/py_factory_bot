@@ -584,7 +584,7 @@ def persist_with(hook, /):
     The session is never committed, so the test's transaction still decides. persist_with(None)
     restores obj.save().
     """
-    if _stack.get():
+    if _defining_factory() is not None:
         raise FactoryError(
             "persist_with() sets the save hook, so call it outside any factory body, e.g. in a fixture."
         )
