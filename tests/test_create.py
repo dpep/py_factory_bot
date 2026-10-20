@@ -32,6 +32,21 @@ def test_persist_with_replaces_save_for_every_factory():
     assert saved == [{"x": 1}]
 
 
+def test_a_falsy_hook_is_still_the_hook():
+    class Saved(list):
+        def __call__(self, obj):
+            self.append(obj)
+
+    saved = persist_with(Saved())
+
+    @factory(dict)
+    def point():
+        f.x = 1
+
+    create("point")
+    assert saved == [{"x": 1}]
+
+
 def test_an_object_without_save_names_both_fixes():
     @factory(dict)
     def point():

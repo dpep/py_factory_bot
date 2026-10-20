@@ -42,6 +42,22 @@ def test_a_function_of_one_parameter_is_a_model_unless_the_parameter_is_f():
     assert build("point") == ("point", 1)
 
 
+def test_a_falsy_callable_is_still_the_model_and_a_child_inherits_it():
+    class Registry(list):
+        def __call__(self, **attributes):
+            return ("made", attributes)
+
+    @factory(Registry())
+    def point():
+        f.x = 1
+
+    @factory(parent=point)
+    def origin():
+        f.x = 0
+
+    assert (build(point), build(origin)) == (("made", {"x": 1}), ("made", {"x": 0}))
+
+
 def test_a_plain_function_is_a_model_too():
     def make_point(**kwargs):
         return kwargs

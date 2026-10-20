@@ -254,7 +254,7 @@ class _Definition:
                 and key[:-3] not in passed
                 and isinstance(_unwrap(definitions.get(key[:-3])), _Association)
             },
-            model=next(d.model for d in reversed(lineage) if d.model),
+            model=next(d.model for d in reversed(lineage) if d.model is not None),
             callbacks={
                 kind: [cb for layer in layers for cb in layer.callbacks[kind]]
                 for kind in self.callbacks
@@ -650,7 +650,8 @@ def _add_and_flush(session, obj):
 
 
 def _persist(evaluator, obj):
-    if hook := next(reversed(_hooks.values()), None):
+    hook = next(reversed(_hooks.values()), None)
+    if hook is not None:
         hook(obj)
         return
     if not hasattr(obj, "save"):
