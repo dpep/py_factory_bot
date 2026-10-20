@@ -32,7 +32,7 @@ Changelog = "https://github.com/dpep/py_factory_bot/blob/main/CHANGELOG.md"
 
 [dependency-groups]
 dev = [
-  "pytest >= 8.2",
+  "pytest >= 9.1.1",
   "pytest-randomly",
   "coverage[toml]",
   "ruff",
