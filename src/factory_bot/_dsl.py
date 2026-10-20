@@ -46,9 +46,14 @@ def _define(body, model, parent):
     _check_body(body, "factory")
     name = body.__name__
     if outer := _defining_factory():
+        model_arg = (
+            [getattr(model, "__name__", repr(model))] if model is not None else []
+        )
+        parent_name = outer if parent is None else _name_of(parent)
+        args = ", ".join([*model_arg, f"parent={parent_name}"])
         raise FactoryError(
             f"@factory def {name} is inside factory {outer!r}; define a child"
-            f" after its parent, at the top level: @factory(parent={outer}) def {name}"
+            f" after its parent, at the top level: @factory({args}) def {name}"
         )
     if parent is not None:
         parent_name = _name_of(parent)

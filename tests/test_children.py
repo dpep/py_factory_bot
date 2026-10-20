@@ -101,21 +101,41 @@ def _in_body():
             pass
 
 
-def _in_trait():
+def _with_a_model_in_a_trait():
     @factory(User)
     def user():
         @trait
         def admin():
-            @factory(Admin, parent="user")
+            @factory(Admin)
             def guest():
                 pass
 
 
-@pytest.mark.parametrize("define", [_in_body, _in_trait], ids=["body", "trait"])
-def test_a_factory_inside_a_body_shows_the_parent_spelling(define):
+def _with_another_parent():
+    @factory(User)
+    def account():
+        pass
+
+    @factory(User)
+    def user():
+        @factory(parent="account")
+        def guest():
+            pass
+
+
+@pytest.mark.parametrize(
+    ("define", "fix"),
+    [
+        (_in_body, "@factory(parent=user)"),
+        (_with_a_model_in_a_trait, "@factory(Admin, parent=user)"),
+        (_with_another_parent, "@factory(parent=account)"),
+    ],
+    ids=["bare", "model, in a trait", "parent="],
+)
+def test_a_factory_inside_a_body_shows_the_parent_spelling(define, fix):
     message = (
         "Factory 'user': @factory def guest is inside factory 'user'; define a child"
-        " after its parent, at the top level: @factory(parent=user) def guest"
+        f" after its parent, at the top level: {fix} def guest"
     )
     with pytest.raises(FactoryError, match=f"^{re.escape(message)}$"):
         define()
