@@ -14,7 +14,7 @@ requires-python = ">= 3.11"
 dependencies = ["faker >= 23.2"]
 keywords = ["testing", "factories", "fixtures", "factory_bot"]
 classifiers = [
-  "Development Status :: 2 - Pre-Alpha",
+  "Development Status :: 3 - Alpha",
   "Framework :: Pytest",
   "Intended Audience :: Developers",
   "Programming Language :: Python :: 3",

@@ -18,7 +18,7 @@ from ._dsl import after_build, after_create, f, factory, trait
 from ._fake import fake, seed
 
 __author__ = "dpepper"
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 
 __all__ = [
     "Factory",
